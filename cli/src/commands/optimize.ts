@@ -8,12 +8,11 @@ import {
   buildRegistryScanOptions,
   emitResult,
   resolveFormat,
-  resolveHomeDir,
-  resolveWorkspaceRoot,
+  resolveGovernanceStoreRoot,
+  StoreResolutionError,
 } from '../cli.js'
 import type { GovernancePolicy, JsonValue } from '../types.js'
 import { writeGovernancePlan } from '../store/plans.js'
-import { resolveSkillGovernorRoot } from '../store/paths.js'
 import { writeRegistryDocument } from '../store/state.js'
 import { GovernanceWorkflowError } from '../apply.js'
 
@@ -49,7 +48,9 @@ export function registerOptimizeCommand(program: Command): Command {
         renderOptimizeText,
       )
     } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null
+      const workflowError = error instanceof GovernanceWorkflowError || error instanceof StoreResolutionError
+        ? error
+        : null
       emitResult(
         failure(
           workflowError?.code ?? 'OPTIMIZE_FAILED',
@@ -95,16 +96,7 @@ function renderFailureText(result: { ok: false; error: { code: string; message: 
 }
 
 function resolveTargetStoreRoot(options: GovernanceCommandOptions): string {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim()
-  }
-
-  const scope = options.scope === 'user' ? 'user' : 'workspace'
-  return resolveSkillGovernorRoot(
-    scope,
-    resolveHomeDir(options),
-    resolveWorkspaceRoot(options),
-  )
+  return resolveGovernanceStoreRoot(options)
 }
 
 function normalizeDetails(details: unknown): JsonValue | undefined {

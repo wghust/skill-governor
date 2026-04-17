@@ -17,6 +17,10 @@ import { registerRollbackCommand } from './commands/rollback.js'
 import type { CliResult, GovernancePolicy, Provider, SourceScope } from './types.js'
 import { failure } from './contracts.js'
 import type { BuiltinProviderId } from './providers/types.js'
+import {
+  detectLegacyWorkspaceSkillGovernorRoot,
+  resolveSkillGovernorRoot,
+} from './store/paths.js'
 
 type RuntimeProcess = {
   cwd?: () => string
@@ -47,6 +51,18 @@ export interface GovernanceCommandOptions extends RegistrySelectionOptions {
   storeRoot?: string
   dryRun?: boolean
   refresh?: boolean
+}
+
+export class StoreResolutionError extends Error {
+  code: string
+  details?: unknown
+
+  constructor(code: string, message: string, details?: unknown) {
+    super(message)
+    this.name = 'StoreResolutionError'
+    this.code = code
+    this.details = details
+  }
 }
 
 export function buildCli(): Command {
@@ -122,6 +138,41 @@ export function buildRegistryScanOptions(options: RegistrySelectionOptions) {
     providers: normalizeProviderSelection(options.provider),
     sourceScopes: normalizeSourceScopeSelection(options.sourceScope),
   }
+}
+
+export function resolveGovernanceStoreRoot(options: GovernanceCommandOptions): string {
+  if (options.storeRoot?.trim()) {
+    return options.storeRoot.trim()
+  }
+
+  if (options.scope !== 'user' && options.scope !== 'workspace') {
+    throw new StoreResolutionError(
+      'STORE_ROOT_REQUIRED',
+      'Use --store-root or select a scope with --scope user|workspace.',
+    )
+  }
+
+  const workspaceRoot = resolveWorkspaceRoot(options)
+  const storeRoot = resolveSkillGovernorRoot(
+    options.scope,
+    resolveHomeDir(options),
+    workspaceRoot,
+  )
+  const legacyStoreRoot = detectLegacyWorkspaceSkillGovernorRoot(workspaceRoot, storeRoot)
+
+  if (legacyStoreRoot !== null) {
+    throw new StoreResolutionError(
+      'LEGACY_STORE_FOUND',
+      `Legacy workspace-local store detected at ${legacyStoreRoot}. Migrate it to ${storeRoot} or rerun with --store-root to select the legacy location explicitly.`,
+      {
+        legacyStoreRoot,
+        storeRoot,
+        workspaceRoot,
+      },
+    )
+  }
+
+  return storeRoot
 }
 
 export function emitResult<T>(

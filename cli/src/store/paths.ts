@@ -1,10 +1,21 @@
 // @ts-ignore - Node types are not wired into this repo yet.
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+// @ts-ignore - Node types are not wired into this repo yet.
+import { dirname, join, parse } from 'node:path'
 
 import type { SourceScope } from '../types.js'
 
 export type StoreScope = SourceScope
 
+type RuntimeProcess = {
+  argv?: string[]
+  cwd?: () => string
+}
+
+const runtimeProcess = (globalThis as { process?: RuntimeProcess }).process
+const CURRENT_FILE_PATH = runtimeProcess?.argv?.[1]?.trim()
+  ? runtimeProcess.argv[1]
+  : join(runtimeProcess?.cwd?.() ?? '.', 'SKILL.md')
 const STORE_DIR_NAME = '.skill-governor'
 const REGISTRY_FILE_NAME = 'registry.json'
 const STATE_FILE_NAME = 'state.json'
@@ -14,22 +25,52 @@ const SNAPSHOTS_DIR_NAME = 'snapshots'
 const RUNTIME_DIR_NAME = 'runtime'
 const RUNTIME_INDEX_FILE_NAME = 'index.json'
 
-export function resolveUserSkillGovernorRoot(homeDir: string): string {
-  return join(homeDir, STORE_DIR_NAME)
+export function resolveSkillHome(startFilePath: string = CURRENT_FILE_PATH): string {
+  let currentDir = dirname(startFilePath)
+  const root = parse(currentDir).root
+
+  while (true) {
+    if (existsSync(join(currentDir, 'SKILL.md'))) {
+      return currentDir
+    }
+
+    if (currentDir === root) {
+      return currentDir
+    }
+
+    currentDir = dirname(currentDir)
+  }
 }
 
-export function resolveWorkspaceSkillGovernorRoot(workspaceRoot: string): string {
-  return join(workspaceRoot, STORE_DIR_NAME)
+export function resolveScopedSkillGovernorRoot(
+  skillHome: string,
+  scope: StoreScope,
+): string {
+  return join(skillHome, STORE_DIR_NAME, scope)
 }
 
 export function resolveSkillGovernorRoot(
   scope: StoreScope,
-  homeDir: string,
-  workspaceRoot: string,
+  _homeDir: string,
+  _workspaceRoot: string,
 ): string {
-  return scope === 'user'
-    ? resolveUserSkillGovernorRoot(homeDir)
-    : resolveWorkspaceSkillGovernorRoot(workspaceRoot)
+  return resolveScopedSkillGovernorRoot(resolveSkillHome(), scope)
+}
+
+export function resolveLegacyWorkspaceSkillGovernorRoot(workspaceRoot: string): string {
+  return join(workspaceRoot, STORE_DIR_NAME)
+}
+
+export function detectLegacyWorkspaceSkillGovernorRoot(
+  workspaceRoot: string,
+  resolvedStoreRoot: string,
+): string | null {
+  const legacyRoot = resolveLegacyWorkspaceSkillGovernorRoot(workspaceRoot)
+  if (legacyRoot === resolvedStoreRoot) {
+    return null
+  }
+
+  return existsSync(legacyRoot) ? legacyRoot : null
 }
 
 export function resolveRegistryFilePath(storeRoot: string): string {

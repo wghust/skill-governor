@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "generatedAt": "2026-04-17T18:13:34.591Z",
+  "workspaceRoot": "/var/folders/qz/brjl9nqs0n34tqwlf9jw3nq00000gn/T/skill-governor-e2e-XISIqi/workspace",
+  "sources": {
+    "user": true,
+    "workspace": true
+  },
+  "providers": [
+    "codex",
+    "cursor"
+  ],
+  "skills": [
+    {
+      "id": "skill:codex:user:f81be5093da0e440",
+      "name": "Governance Core",
+      "description": "Shared governance entrypoint",
+      "provider": "codex",
+      "sourceScope": "user",
+      "path": "/var/folders/qz/brjl9nqs0n34tqwlf9jw3nq00000gn/T/skill-governor-e2e-XISIqi/home/.codex/skills/governance-core-user",
+      "entryFile": "/var/folders/qz/brjl9nqs0n34tqwlf9jw3nq00000gn/T/skill-governor-e2e-XISIqi/home/.codex/skills/governance-core-user/SKILL.md",
+      "domain": "governance-core-user",
+      "tags": [
+        "brjl9nqs0n34tqwlf9jw3nq00000gn",
+        "codex",
+        "core",
+        "entrypoint",
+        "folders",
+        "governance",
+        "governance-core-user",
+        "home",
+        "qz",
+        "shared",
+        "skill-governor-e2e-xisiqi",
+        "t",
+        "var"
+      ],
+      "currentMode": "manual",
+      "currentPriority": 50,
+      "currentGovernanceScope": "workspace",
+      "fingerprints": {
+        "nameNorm": "governance-core",
+        "descHash": "886cd660b7b04c0d",
+        "tokenSet": [
+          "brjl9nqs0n34tqwlf9jw3nq00000gn",
+          "codex",
+          "core",
+          "entrypoint",
+          "folders",
+          "governance",
+          "governance-core-user",
+          "home",
+          "qz",
+          "shared",
+          "skill-governor-e2e-xisiqi",
+          "t",
+          "var"
+        ]
+      },
+      "metadata": {
+        "parseWarnings": [],
+        "inferred": true,
+        "discoveredAt": "2026-04-17T18:13:34.585Z"
+      }
+    },
+    {
+      "id": "skill:cursor:workspace:81502abfaf2861ad",
+      "name": "Governance Core",
+      "description": "Shared governance entrypoint",
+      "provider": "cursor",
+      "sourceScope": "workspace",
+      "path": "/var/folders/qz/brjl9nqs0n34tqwlf9jw3nq00000gn/T/skill-governor-e2e-XISIqi/workspace/.cursor/skills/governance-core-workspace",
+      "entryFile": "/var/folders/qz/brjl9nqs0n34tqwlf9jw3nq00000gn/T/skill-governor-e2e-XISIqi/workspace/.cursor/skills/governance-core-workspace/SKILL.md",
+      "domain": "governance-core-workspace",
+      "tags": [
+        "brjl9nqs0n34tqwlf9jw3nq00000gn",
+        "core",
+        "cursor",
+        "entrypoint",
+        "folders",
+        "governance",
+        "governance-core-workspace",
+        "qz",
+        "shared",
+        "skill-governor-e2e-xisiqi",
+        "t",
+        "var",
+        "workspace"
+      ],
+      "currentMode": "manual",
+      "currentPriority": 50,
+      "currentGovernanceScope": "workspace",
+      "fingerprints": {
+        "nameNorm": "governance-core",
+        "descHash": "886cd660b7b04c0d",
+        "tokenSet": [
+          "brjl9nqs0n34tqwlf9jw3nq00000gn",
+          "core",
+          "cursor",
+          "entrypoint",
+          "folders",
+          "governance",
+          "governance-core-workspace",
+          "qz",
+          "shared",
+          "skill-governor-e2e-xisiqi",
+          "t",
+          "var",
+          "workspace"
+        ]
+      },
+      "metadata": {
+        "parseWarnings": [],
+        "inferred": true,
+        "discoveredAt": "2026-04-17T18:13:34.591Z"
+      }
+    }
+  ]
+}

@@ -16,10 +16,9 @@ import {
   resolvePlanFilePath,
   resolveProfileFilePath,
   resolveRegistryFilePath,
+  resolveScopedSkillGovernorRoot,
   resolveSnapshotFilePath,
   resolveStateFilePath,
-  resolveUserSkillGovernorRoot,
-  resolveWorkspaceSkillGovernorRoot,
 } from '../src/store/paths.js'
 import { readJsonFile } from '../src/store/files.js'
 import {
@@ -48,8 +47,8 @@ async function createStoreFixture(): Promise<{
   const baseDir = await mkdtemp(join(tmpdir(), 'skill-governor-store-'))
   const homeDir = join(baseDir, 'home')
   const workspaceRoot = join(baseDir, 'workspace')
-  const userRoot = resolveUserSkillGovernorRoot(homeDir)
-  const workspaceStoreRoot = resolveWorkspaceSkillGovernorRoot(workspaceRoot)
+  const userRoot = resolveScopedSkillGovernorRoot(baseDir, 'user')
+  const workspaceStoreRoot = resolveScopedSkillGovernorRoot(baseDir, 'workspace')
 
   return {
     baseDir,
@@ -65,11 +64,11 @@ describe('store', () => {
     const fixture = await createStoreFixture()
 
     try {
-      expect(resolveUserSkillGovernorRoot(fixture.homeDir)).toBe(
-        join(fixture.homeDir, '.skill-governor'),
+      expect(resolveScopedSkillGovernorRoot(fixture.baseDir, 'user')).toBe(
+        join(fixture.baseDir, '.skill-governor', 'user'),
       )
-      expect(resolveWorkspaceSkillGovernorRoot(fixture.workspaceRoot)).toBe(
-        join(fixture.workspaceRoot, '.skill-governor'),
+      expect(resolveScopedSkillGovernorRoot(fixture.baseDir, 'workspace')).toBe(
+        join(fixture.baseDir, '.skill-governor', 'workspace'),
       )
       expect(resolveRegistryFilePath(fixture.userRoot)).toBe(
         join(fixture.userRoot, 'registry.json'),

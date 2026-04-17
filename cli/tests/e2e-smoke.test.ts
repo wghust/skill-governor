@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { buildCli } from '../src/cli.js'
-import { writeGovernancePlan } from '../src/store/plans.js'
 import { readStateDocument } from '../src/store/state.js'
 
 async function createFixture(): Promise<{
@@ -87,6 +86,10 @@ describe('e2e smoke', () => {
       'optimize',
       '--policy',
       'conservative',
+      '--scope',
+      'workspace',
+      '--store-root',
+      fixture.storeRoot,
       '--workspace-root',
       fixture.workspaceRoot,
       '--home-dir',
@@ -109,9 +112,6 @@ describe('e2e smoke', () => {
     expect(optimizeResult.data.policy).toBe('conservative')
     expect(optimizeResult.data.summary.totalSkills).toBe(2)
     expect(optimizeResult.data.summary.duplicateGroups).toBe(1)
-
-    await writeGovernancePlan(fixture.storeRoot, optimizeResult.data as never)
-
     const applyOutput = await runCli([
       'apply',
       '--plan',
@@ -141,6 +141,8 @@ describe('e2e smoke', () => {
 
     const reportOutput = await runCli([
       'report',
+      '--store-root',
+      fixture.storeRoot,
       '--workspace-root',
       fixture.workspaceRoot,
       '--home-dir',

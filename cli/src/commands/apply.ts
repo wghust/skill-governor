@@ -1,10 +1,14 @@
 import type { Command } from 'commander'
 
 import { success, failure } from '../contracts.js'
-import { emitResult, resolveFormat, resolveHomeDir, resolveWorkspaceRoot } from '../cli.js'
+import {
+  emitResult,
+  resolveFormat,
+  resolveGovernanceStoreRoot,
+  StoreResolutionError,
+} from '../cli.js'
 import type { GovernanceCommandOptions } from '../cli.js'
 import type { JsonValue } from '../types.js'
-import { resolveSkillGovernorRoot } from '../store/paths.js'
 import { applyPlan, GovernanceWorkflowError, previewApplyPlan } from '../apply.js'
 
 export function registerApplyCommand(program: Command): Command {
@@ -33,7 +37,9 @@ export function registerApplyCommand(program: Command): Command {
       const result = await applyPlan({ storeRoot, planId })
       emitResult(success(result), resolveFormat(options.format), renderApplyText)
     } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null
+      const workflowError = error instanceof GovernanceWorkflowError || error instanceof StoreResolutionError
+        ? error
+        : null
       emitResult(
         failure(
           workflowError?.code ?? 'APPLY_FAILED',
@@ -79,22 +85,7 @@ function requirePlanId(options: GovernanceCommandOptions): string {
 }
 
 function resolveTargetStoreRoot(options: GovernanceCommandOptions): string {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim()
-  }
-
-  if (options.scope === 'user' || options.scope === 'workspace') {
-    return resolveSkillGovernorRoot(
-      options.scope,
-      resolveHomeDir(options),
-      resolveWorkspaceRoot(options),
-    )
-  }
-
-  throw new GovernanceWorkflowError(
-    'STORE_ROOT_REQUIRED',
-    'Use --store-root or select a scope with --scope user|workspace.',
-  )
+  return resolveGovernanceStoreRoot(options)
 }
 
 function normalizeDetails(details: unknown): JsonValue | undefined {

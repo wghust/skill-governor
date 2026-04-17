@@ -12,7 +12,7 @@ Use this directory when you need to maintain the runtime, commands, scanning log
 - Normalize skills across `user` and `workspace` scopes
 - Audit, dedupe, cluster, and optimize governance state
 - Apply plans and create rollback snapshots
-- Persist governance state under `.skill-governor/`
+- Persist governance state under the installed skill's `.skill-governor/<scope>/` directories by default
 - Keep raw provider `SKILL.md` files read-only
 
 ## Interaction model
@@ -88,5 +88,6 @@ Activate a profile:
 - The repository-root [SKILL.md](/Users/wangbinbin/Documents/workspace/skill-governor/SKILL.md) is the primary interface.
 - The runtime distribution target is `SKILL.md + bin/skill-governor`.
 - All governance writes go through the CLI execution engine.
+- Default writes stay under the skill-owned store, not the governed workspace root.
 - Raw provider `SKILL.md` files remain read-only.
 - `apply` and `rollback` are snapshot-based.

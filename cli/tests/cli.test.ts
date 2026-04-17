@@ -1,10 +1,9 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildCli } from '../src/cli'
-import { resolveWorkspaceSkillGovernorRoot } from '../src/store/paths'
 import { readGovernancePlan } from '../src/store/plans'
 
 async function createEmptyRoots(): Promise<{ workspaceRoot: string; homeDir: string }> {
@@ -86,10 +85,15 @@ describe('CLI wiring', () => {
 
   it('prints a JSON envelope for optimize with the requested policy', async () => {
     roots = await createEmptyRoots()
+    const storeRoot = join(roots.homeDir, 'store-root')
     const output = await runCli([
       'optimize',
       '--policy',
       'conservative',
+      '--scope',
+      'workspace',
+      '--store-root',
+      storeRoot,
       '--workspace-root',
       roots.workspaceRoot,
       '--home-dir',
@@ -113,13 +117,43 @@ describe('CLI wiring', () => {
     expect(parsed.ok).toBe(true)
     expect(parsed.data.policy).toBe('conservative')
     expect(parsed.data.dryRun).toBe(true)
-    expect(parsed.data.storeRoot).toBe(resolveWorkspaceSkillGovernorRoot(roots.workspaceRoot))
+    expect(parsed.data.storeRoot).toBe(storeRoot)
     expect(parsed.data.summary.totalSkills).toBe(0)
     expect(parsed.data.summary.duplicateGroups).toBe(0)
     expect(parsed.data.profileDrafts[0]?.name).toBe('conservative')
 
     const persisted = await readGovernancePlan(parsed.data.storeRoot, parsed.data.id)
     expect(persisted?.id).toBe(parsed.data.id)
+  })
+
+  it('surfaces legacy workspace-local stores instead of silently writing there', async () => {
+    roots = await createEmptyRoots()
+    const legacyStoreRoot = join(roots.workspaceRoot, '.skill-governor')
+    await mkdir(legacyStoreRoot, { recursive: true })
+
+    const output = await runCli([
+      'optimize',
+      '--policy',
+      'conservative',
+      '--scope',
+      'workspace',
+      '--workspace-root',
+      roots.workspaceRoot,
+      '--home-dir',
+      roots.homeDir,
+      '--format',
+      'json',
+    ])
+
+    const parsed = JSON.parse(output) as {
+      ok: false
+      error: { code: string; message: string; details?: { legacyStoreRoot?: string } }
+    }
+
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error.code).toBe('LEGACY_STORE_FOUND')
+    expect(parsed.error.details?.legacyStoreRoot).toBe(legacyStoreRoot)
+    expect(parsed.error.message).toContain(legacyStoreRoot)
   })
 
   it('registers apply, rollback, and profile use commands', () => {

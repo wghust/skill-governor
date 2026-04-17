@@ -5,15 +5,14 @@ import {
   buildRegistryScanOptions,
   emitResult,
   resolveFormat,
-  resolveHomeDir,
-  resolveWorkspaceRoot,
+  resolveGovernanceStoreRoot,
+  StoreResolutionError,
 } from '../cli.js'
 import type { GovernanceCommandOptions } from '../cli.js'
 import type { JsonValue, Provider, RuntimeProjectionSet } from '../types.js'
 import { GovernanceWorkflowError } from '../apply.js'
 import { scanAndNormalizeRegistry } from '../registry/index.js'
 import { writeRegistryDocument, readRegistryDocument } from '../store/state.js'
-import { resolveSkillGovernorRoot } from '../store/paths.js'
 import { refreshRuntimeProjections } from '../runtime/resolve.js'
 
 export function registerProjectionCommand(program: Command): Command {
@@ -41,7 +40,9 @@ export function registerProjectionCommand(program: Command): Command {
         renderProjectionText,
       )
     } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null
+      const workflowError = error instanceof GovernanceWorkflowError || error instanceof StoreResolutionError
+        ? error
+        : null
       emitResult(
         failure(
           workflowError?.code ?? 'PROJECTION_FAILED',
@@ -99,16 +100,7 @@ function renderFailureText(result: { ok: false; error: { code: string; message: 
 }
 
 function resolveTargetStoreRoot(options: GovernanceCommandOptions): string {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim()
-  }
-
-  const scope = options.scope === 'user' ? 'user' : 'workspace'
-  return resolveSkillGovernorRoot(
-    scope,
-    resolveHomeDir(options),
-    resolveWorkspaceRoot(options),
-  )
+  return resolveGovernanceStoreRoot(options)
 }
 
 function normalizeDetails(details: unknown): JsonValue | undefined {

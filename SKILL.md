@@ -27,6 +27,7 @@ Use this skill as the primary interface for skill governance. Execute through `b
 - Prefer `--format json` so results are stable and easy to summarize.
 - Pass `--provider` and `--source-scope` when the user narrows the target set.
 - Pass `--scope user|workspace` or `--store-root <path>` for state-changing commands.
+- Default governance artifacts live under the installed skill home at `.skill-governor/user/` or `.skill-governor/workspace/`, not in the governed project root.
 - Use `optimize` to generate or review a plan before `apply`.
 - Keep the user-facing explanation skill-first even when the actual work happens in the CLI.
 

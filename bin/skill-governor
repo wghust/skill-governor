@@ -4288,8 +4288,14 @@ function renderFailureText(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
 
+// src/apply.ts
+var import_promises4 = require("node:fs/promises");
+
 // src/store/paths.ts
+var import_node_fs = require("node:fs");
 var import_node_path6 = require("node:path");
+var runtimeProcess = globalThis.process;
+var CURRENT_FILE_PATH = runtimeProcess?.argv?.[1]?.trim() ? runtimeProcess.argv[1] : (0, import_node_path6.join)(runtimeProcess?.cwd?.() ?? ".", "SKILL.md");
 var STORE_DIR_NAME = ".skill-governor";
 var REGISTRY_FILE_NAME = "registry.json";
 var STATE_FILE_NAME = "state.json";
@@ -4298,14 +4304,34 @@ var PLANS_DIR_NAME = "plans";
 var SNAPSHOTS_DIR_NAME = "snapshots";
 var RUNTIME_DIR_NAME = "runtime";
 var RUNTIME_INDEX_FILE_NAME = "index.json";
-function resolveUserSkillGovernorRoot(homeDir) {
-  return (0, import_node_path6.join)(homeDir, STORE_DIR_NAME);
+function resolveSkillHome(startFilePath = CURRENT_FILE_PATH) {
+  let currentDir = (0, import_node_path6.dirname)(startFilePath);
+  const root = (0, import_node_path6.parse)(currentDir).root;
+  while (true) {
+    if ((0, import_node_fs.existsSync)((0, import_node_path6.join)(currentDir, "SKILL.md"))) {
+      return currentDir;
+    }
+    if (currentDir === root) {
+      return currentDir;
+    }
+    currentDir = (0, import_node_path6.dirname)(currentDir);
+  }
 }
-function resolveWorkspaceSkillGovernorRoot(workspaceRoot) {
+function resolveScopedSkillGovernorRoot(skillHome, scope) {
+  return (0, import_node_path6.join)(skillHome, STORE_DIR_NAME, scope);
+}
+function resolveSkillGovernorRoot(scope, _homeDir, _workspaceRoot) {
+  return resolveScopedSkillGovernorRoot(resolveSkillHome(), scope);
+}
+function resolveLegacyWorkspaceSkillGovernorRoot(workspaceRoot) {
   return (0, import_node_path6.join)(workspaceRoot, STORE_DIR_NAME);
 }
-function resolveSkillGovernorRoot(scope, homeDir, workspaceRoot) {
-  return scope === "user" ? resolveUserSkillGovernorRoot(homeDir) : resolveWorkspaceSkillGovernorRoot(workspaceRoot);
+function detectLegacyWorkspaceSkillGovernorRoot(workspaceRoot, resolvedStoreRoot) {
+  const legacyRoot = resolveLegacyWorkspaceSkillGovernorRoot(workspaceRoot);
+  if (legacyRoot === resolvedStoreRoot) {
+    return null;
+  }
+  return (0, import_node_fs.existsSync)(legacyRoot) ? legacyRoot : null;
 }
 function resolveRegistryFilePath(storeRoot) {
   return (0, import_node_path6.join)(storeRoot, REGISTRY_FILE_NAME);
@@ -4347,9 +4373,6 @@ function sanitizeArtifactStem(value) {
   const normalized = value.trim().replace(/[^A-Za-z0-9._-]+/gu, "-").replace(/-+/gu, "-").replace(/^-+|-+$/gu, "");
   return normalized.length > 0 ? normalized : "item";
 }
-
-// src/apply.ts
-var import_promises4 = require("node:fs/promises");
 
 // src/store/files.ts
 var import_promises2 = require("node:fs/promises");
@@ -5463,7 +5486,7 @@ function registerApplyCommand(program2) {
       const result = await applyPlan({ storeRoot, planId });
       emitResult(success(result), resolveFormat(options.format), renderApplyText);
     } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
+      const workflowError = error instanceof GovernanceWorkflowError || error instanceof StoreResolutionError ? error : null;
       emitResult(
         failure(
           workflowError?.code ?? "APPLY_FAILED",
@@ -5502,20 +5525,7 @@ function requirePlanId(options) {
   return planId;
 }
 function resolveTargetStoreRoot(options) {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim();
-  }
-  if (options.scope === "user" || options.scope === "workspace") {
-    return resolveSkillGovernorRoot(
-      options.scope,
-      resolveHomeDir(options),
-      resolveWorkspaceRoot(options)
-    );
-  }
-  throw new GovernanceWorkflowError(
-    "STORE_ROOT_REQUIRED",
-    "Use --store-root or select a scope with --scope user|workspace."
-  );
+  return resolveGovernanceStoreRoot(options);
 }
 function normalizeDetails(details) {
   return details === void 0 ? void 0 : details;
@@ -6280,7 +6290,7 @@ function registerOptimizeCommand(program2) {
         renderOptimizeText
       );
     } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
+      const workflowError = error instanceof GovernanceWorkflowError || error instanceof StoreResolutionError ? error : null;
       emitResult(
         failure(
           workflowError?.code ?? "OPTIMIZE_FAILED",
@@ -6319,15 +6329,7 @@ function renderFailureText7(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
 function resolveTargetStoreRoot2(options) {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim();
-  }
-  const scope = options.scope === "user" ? "user" : "workspace";
-  return resolveSkillGovernorRoot(
-    scope,
-    resolveHomeDir(options),
-    resolveWorkspaceRoot(options)
-  );
+  return resolveGovernanceStoreRoot(options);
 }
 function normalizeDetails2(details) {
   return details === void 0 ? void 0 : details;
@@ -6347,7 +6349,7 @@ function registerProfileUseCommand(program2) {
         renderProfileUseText
       );
     } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
+      const workflowError = error instanceof GovernanceWorkflowError || error instanceof StoreResolutionError ? error : null;
       emitResult(
         failure(
           workflowError?.code ?? "PROFILE_USE_FAILED",
@@ -6376,20 +6378,7 @@ function renderFailureText8(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
 function resolveTargetStoreRoot3(options) {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim();
-  }
-  if (options.scope === "user" || options.scope === "workspace") {
-    return resolveSkillGovernorRoot(
-      options.scope,
-      resolveHomeDir(options),
-      resolveWorkspaceRoot(options)
-    );
-  }
-  throw new GovernanceWorkflowError(
-    "STORE_ROOT_REQUIRED",
-    "Use --store-root or select a scope with --scope user|workspace."
-  );
+  return resolveGovernanceStoreRoot(options);
 }
 function normalizeDetails3(details) {
   return details === void 0 ? void 0 : details;
@@ -6409,7 +6398,7 @@ function registerProjectionCommand(program2) {
         renderProjectionText
       );
     } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
+      const workflowError = error instanceof GovernanceWorkflowError || error instanceof StoreResolutionError ? error : null;
       emitResult(
         failure(
           workflowError?.code ?? "PROJECTION_FAILED",
@@ -6455,15 +6444,7 @@ function renderFailureText9(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
 function resolveTargetStoreRoot4(options) {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim();
-  }
-  const scope = options.scope === "user" ? "user" : "workspace";
-  return resolveSkillGovernorRoot(
-    scope,
-    resolveHomeDir(options),
-    resolveWorkspaceRoot(options)
-  );
+  return resolveGovernanceStoreRoot(options);
 }
 function normalizeDetails4(details) {
   return details === void 0 ? void 0 : details;
@@ -6502,8 +6483,13 @@ function registerReportCommand(program2) {
         renderReportText
       );
     } catch (error) {
+      const workflowError = error instanceof StoreResolutionError ? error : null;
       emitResult(
-        failure("REPORT_FAILED", error instanceof Error ? error.message : "Failed to generate report"),
+        failure(
+          workflowError?.code ?? "REPORT_FAILED",
+          error instanceof Error ? error.message : "Failed to generate report",
+          workflowError?.details
+        ),
         resolveFormat(options.format),
         renderFailureText10
       );
@@ -6530,15 +6516,7 @@ function renderFailureText10(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
 function resolveTargetStoreRoot5(options) {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim();
-  }
-  const scope = options.scope === "user" ? "user" : "workspace";
-  return resolveSkillGovernorRoot(
-    scope,
-    resolveHomeDir(options),
-    resolveWorkspaceRoot(options)
-  );
+  return resolveGovernanceStoreRoot(options);
 }
 
 // src/commands/rollback.ts
@@ -6551,7 +6529,7 @@ function registerRollbackCommand(program2) {
       const result = await rollbackSnapshot({ storeRoot, snapshotId });
       emitResult(success(result), resolveFormat(options.format), renderRollbackText);
     } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
+      const workflowError = error instanceof GovernanceWorkflowError || error instanceof StoreResolutionError ? error : null;
       emitResult(
         failure(
           workflowError?.code ?? "ROLLBACK_FAILED",
@@ -6581,27 +6559,22 @@ function renderFailureText11(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
 function resolveTargetStoreRoot6(options) {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim();
-  }
-  if (options.scope === "user" || options.scope === "workspace") {
-    return resolveSkillGovernorRoot(
-      options.scope,
-      resolveHomeDir(options),
-      resolveWorkspaceRoot(options)
-    );
-  }
-  throw new GovernanceWorkflowError(
-    "STORE_ROOT_REQUIRED",
-    "Use --store-root or select a scope with --scope user|workspace."
-  );
+  return resolveGovernanceStoreRoot(options);
 }
 function normalizeDetails5(details) {
   return details === void 0 ? void 0 : details;
 }
 
 // src/cli.ts
-var runtimeProcess = globalThis.process;
+var runtimeProcess2 = globalThis.process;
+var StoreResolutionError = class extends Error {
+  constructor(code, message, details) {
+    super(message);
+    this.name = "StoreResolutionError";
+    this.code = code;
+    this.details = details;
+  }
+};
 function buildCli() {
   const program2 = new Command().name("skill-governor").description("AI-native skill governance CLI").showHelpAfterError();
   registerListCommand(program2);
@@ -6621,7 +6594,7 @@ function resolveFormat(value) {
   return value === "json" ? "json" : "text";
 }
 function resolveWorkspaceRoot(options) {
-  return options.workspaceRoot?.trim() || runtimeProcess?.cwd?.() || ".";
+  return options.workspaceRoot?.trim() || runtimeProcess2?.cwd?.() || ".";
 }
 function resolveHomeDir(options) {
   return options.homeDir?.trim() || (0, import_node_os2.homedir)();
@@ -6654,6 +6627,36 @@ function buildRegistryScanOptions(options) {
     sourceScopes: normalizeSourceScopeSelection(options.sourceScope)
   };
 }
+function resolveGovernanceStoreRoot(options) {
+  if (options.storeRoot?.trim()) {
+    return options.storeRoot.trim();
+  }
+  if (options.scope !== "user" && options.scope !== "workspace") {
+    throw new StoreResolutionError(
+      "STORE_ROOT_REQUIRED",
+      "Use --store-root or select a scope with --scope user|workspace."
+    );
+  }
+  const workspaceRoot = resolveWorkspaceRoot(options);
+  const storeRoot = resolveSkillGovernorRoot(
+    options.scope,
+    resolveHomeDir(options),
+    workspaceRoot
+  );
+  const legacyStoreRoot = detectLegacyWorkspaceSkillGovernorRoot(workspaceRoot, storeRoot);
+  if (legacyStoreRoot !== null) {
+    throw new StoreResolutionError(
+      "LEGACY_STORE_FOUND",
+      `Legacy workspace-local store detected at ${legacyStoreRoot}. Migrate it to ${storeRoot} or rerun with --store-root to select the legacy location explicitly.`,
+      {
+        legacyStoreRoot,
+        storeRoot,
+        workspaceRoot
+      }
+    );
+  }
+  return storeRoot;
+}
 function emitResult(result, format, renderText) {
   if (format === "json") {
     console.log(JSON.stringify(result, null, 2));
@@ -6665,16 +6668,16 @@ function emitResult(result, format, renderText) {
 }
 
 // src/index.ts
-var runtimeProcess2 = globalThis.process;
-async function main(argv = runtimeProcess2?.argv ?? []) {
+var runtimeProcess3 = globalThis.process;
+async function main(argv = runtimeProcess3?.argv ?? []) {
   buildCli().parse(argv);
 }
 
 // src/bin.ts
-var runtimeProcess3 = globalThis.process;
-void main(runtimeProcess3?.argv ?? []).catch((error) => {
+var runtimeProcess4 = globalThis.process;
+void main(runtimeProcess4?.argv ?? []).catch((error) => {
   console.error(error);
-  if (runtimeProcess3) {
-    runtimeProcess3.exitCode = 1;
+  if (runtimeProcess4) {
+    runtimeProcess4.exitCode = 1;
   }
 });

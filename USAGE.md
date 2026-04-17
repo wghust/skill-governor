@@ -53,6 +53,7 @@ You should normally think in terms of the skill request, not the raw command.
 
 - Do not edit raw provider `SKILL.md` files directly.
 - All write operations must go through `bin/skill-governor`.
+- By default, governance state is written under this skill's own `.skill-governor/user/` or `.skill-governor/workspace/` directories.
 - Treat `optimize` as preview-first.
 - Run `apply` only after explicit confirmation.
 - Use `rollback` for recovery instead of manual file edits.

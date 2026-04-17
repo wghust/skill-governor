@@ -1,10 +1,15 @@
 import type { Command } from 'commander'
 
 import { success, failure } from '../contracts.js'
-import { resolveHomeDir, resolveWorkspaceRoot, type GovernanceCommandOptions } from '../cli.js'
+import {
+  resolveGovernanceStoreRoot,
+  StoreResolutionError,
+  type GovernanceCommandOptions,
+} from '../cli.js'
 import { createAuditSummary } from '../governance/audit.js'
 import { createSkillClusters } from '../governance/cluster.js'
 import { findDuplicateGroups } from '../governance/dedupe.js'
+import type { JsonValue } from '../types.js'
 import { scanAndNormalizeRegistry } from '../registry/index.js'
 import {
   buildRegistryScanOptions,
@@ -12,7 +17,6 @@ import {
   resolveFormat,
 } from '../cli.js'
 import { readRuntimeProjectionSet } from '../store/runtime.js'
-import { resolveSkillGovernorRoot } from '../store/paths.js'
 
 export function registerReportCommand(program: Command): Command {
   const command = program
@@ -59,8 +63,13 @@ export function registerReportCommand(program: Command): Command {
         renderReportText,
       )
     } catch (error) {
+      const workflowError = error instanceof StoreResolutionError ? error : null
       emitResult(
-        failure('REPORT_FAILED', error instanceof Error ? error.message : 'Failed to generate report'),
+        failure(
+          workflowError?.code ?? 'REPORT_FAILED',
+          error instanceof Error ? error.message : 'Failed to generate report',
+          workflowError?.details as JsonValue | undefined,
+        ),
         resolveFormat(options.format),
         renderFailureText,
       )
@@ -97,14 +106,5 @@ function renderFailureText(result: { ok: false; error: { code: string; message: 
 }
 
 function resolveTargetStoreRoot(options: GovernanceCommandOptions): string {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim()
-  }
-
-  const scope = options.scope === 'user' ? 'user' : 'workspace'
-  return resolveSkillGovernorRoot(
-    scope,
-    resolveHomeDir(options),
-    resolveWorkspaceRoot(options),
-  )
+  return resolveGovernanceStoreRoot(options)
 }
