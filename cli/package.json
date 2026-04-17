@@ -1,0 +1,24 @@
+{
+  "name": "skill-governor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "skill-governor": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:build": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^14.0.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

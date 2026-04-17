@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "id": "plan_conservative_20260417090000",
+  "createdAt": "2026-04-17T09:00:00.000Z",
+  "policy": "conservative",
+  "summary": {
+    "totalSkills": 4,
+    "changedSkills": 3,
+    "duplicateGroups": 1,
+    "suggestedProfiles": [
+      "conservative"
+    ]
+  },
+  "actions": [
+    {
+      "skillId": "skill:cursor:workspace:aaa111",
+      "provider": "cursor",
+      "path": "/workspace/.cursor/skills/governance-core",
+      "before": {
+        "mode": "manual",
+        "priority": 55,
+        "governanceScope": "workspace"
+      },
+      "after": {
+        "mode": "auto",
+        "priority": 90,
+        "governanceScope": "workspace"
+      },
+      "reason": [
+        "duplicate primary selected",
+        "policy:conservative",
+        "sourceScope:workspace",
+        "tier:core"
+      ]
+    },
+    {
+      "skillId": "skill:codex:user:bbb222",
+      "provider": "codex",
+      "path": "/Users/example/.codex/skills/governance-core",
+      "before": {
+        "mode": "manual",
+        "priority": 95,
+        "governanceScope": "workspace"
+      },
+      "after": {
+        "mode": "off",
+        "priority": 42,
+        "governanceScope": "workspace"
+      },
+      "reason": [
+        "duplicate group:name:governance-core",
+        "duplicate secondary demoted",
+        "policy:conservative",
+        "sourceScope:user",
+        "tier:core"
+      ]
+    },
+    {
+      "skillId": "skill:claude:workspace:ccc333",
+      "provider": "claude",
+      "path": "/workspace/.claude/skills/workflow-lab",
+      "before": {
+        "mode": "auto",
+        "priority": 83,
+        "governanceScope": "workspace"
+      },
+      "after": {
+        "mode": "off",
+        "priority": 12,
+        "governanceScope": "workspace"
+      },
+      "reason": [
+        "policy:conservative",
+        "sourceScope:workspace",
+        "tier:experimental"
+      ]
+    }
+  ],
+  "profileDrafts": [
+    {
+      "version": 1,
+      "name": "conservative",
+      "description": "Conservative governance profile generated from a dry-run optimize plan.",
+      "defaults": {
+        "mode": "manual",
+        "priority": 60,
+        "governanceScope": "workspace"
+      },
+      "rules": [
+        {
+          "match": {
+            "tags": [
+              "duplicate-secondary"
+            ]
+          },
+          "set": {
+            "mode": "off",
+            "priority": 30,
+            "governanceScope": "workspace"
+          },
+          "reason": [
+            "secondary skills from duplicate groups are demoted",
+            "policy:conservative"
+          ]
+        },
+        {
+          "match": {
+            "tags": [
+              "core"
+            ]
+          },
+          "set": {
+            "mode": "auto",
+            "priority": 86,
+            "governanceScope": "workspace"
+          },
+          "reason": [
+            "classification tier:core",
+            "policy:conservative"
+          ]
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    "Detected 1 duplicate group(s) using conservative policy threshold.",
+    "Workspace skills are prioritized above user skills when duplicates are resolved."
+  ]
+}

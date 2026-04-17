@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "node",
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmitOnError": true
+  },
+  "include": [
+    "src/apply.ts",
+    "src/cli.ts",
+    "src/contracts.ts",
+    "src/index.ts",
+    "src/types.ts",
+    "src/commands/**/*.ts",
+    "src/governance/**/*.ts",
+    "src/providers/**/*.ts",
+    "src/registry/**/*.ts",
+    "src/store/**/*.ts"
+  ],
+  "exclude": [
+    "tests/**/*.ts",
+    "dist",
+    "node_modules",
+    "src/cli/**",
+    "src/core/**",
+    "src/services/**"
+  ]
+}

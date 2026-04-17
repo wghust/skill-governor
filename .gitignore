@@ -1,0 +1,7 @@
+dist
+node_modules
+.tsbuildinfo
+coverage
+/cli/dist
+/cli/node_modules
+/cli/coverage
