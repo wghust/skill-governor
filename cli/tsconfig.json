@@ -21,6 +21,7 @@
     "src/governance/**/*.ts",
     "src/providers/**/*.ts",
     "src/registry/**/*.ts",
+    "src/runtime/**/*.ts",
     "src/store/**/*.ts"
   ],
   "exclude": [

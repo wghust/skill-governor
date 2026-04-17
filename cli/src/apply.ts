@@ -18,6 +18,7 @@ import {
   readProfileDocument,
   writeProfileDocument,
 } from './store/profiles.js'
+import { refreshRuntimeProjections } from './runtime/resolve.js'
 import {
   resolveProfileFilePath,
   resolveProfilesDir,
@@ -139,6 +140,11 @@ export async function applyPlan(
 
   const state = buildAppliedState(previousState, plan, input.now)
   await writeStateDocument(input.storeRoot, state)
+  await refreshRuntimeProjections({
+    storeRoot: input.storeRoot,
+    state,
+    generatedAt: state.updatedAt,
+  })
 
   return {
     dryRun: false,
@@ -192,6 +198,12 @@ export async function rollbackSnapshot(
     await writeStateDocument(input.storeRoot, snapshot.previousState)
   }
 
+  await refreshRuntimeProjections({
+    storeRoot: input.storeRoot,
+    state: snapshot.previousState,
+    generatedAt: input.now,
+  })
+
   return {
     rolledBack: true,
     storeRoot: input.storeRoot,
@@ -234,6 +246,11 @@ export async function activateProfile(
   }
 
   await writeStateDocument(input.storeRoot, state)
+  await refreshRuntimeProjections({
+    storeRoot: input.storeRoot,
+    state,
+    generatedAt: state.updatedAt,
+  })
 
   return {
     activated: true,

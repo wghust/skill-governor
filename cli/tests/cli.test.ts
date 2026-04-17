@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildCli } from '../src/cli'
+import { resolveWorkspaceSkillGovernorRoot } from '../src/store/paths'
+import { readGovernancePlan } from '../src/store/plans'
 
 async function createEmptyRoots(): Promise<{ workspaceRoot: string; homeDir: string }> {
   const workspaceRoot = await mkdtemp(join(tmpdir(), 'skill-governor-workspace-'))
@@ -99,8 +101,10 @@ describe('CLI wiring', () => {
     const parsed = JSON.parse(output) as {
       ok: boolean
       data: {
+        id: string
         policy: string
         dryRun: boolean
+        storeRoot: string
         summary: { totalSkills: number; duplicateGroups: number }
         profileDrafts: Array<{ name: string }>
       }
@@ -109,9 +113,13 @@ describe('CLI wiring', () => {
     expect(parsed.ok).toBe(true)
     expect(parsed.data.policy).toBe('conservative')
     expect(parsed.data.dryRun).toBe(true)
+    expect(parsed.data.storeRoot).toBe(resolveWorkspaceSkillGovernorRoot(roots.workspaceRoot))
     expect(parsed.data.summary.totalSkills).toBe(0)
     expect(parsed.data.summary.duplicateGroups).toBe(0)
     expect(parsed.data.profileDrafts[0]?.name).toBe('conservative')
+
+    const persisted = await readGovernancePlan(parsed.data.storeRoot, parsed.data.id)
+    expect(persisted?.id).toBe(parsed.data.id)
   })
 
   it('registers apply, rollback, and profile use commands', () => {

@@ -11,6 +11,8 @@ const STATE_FILE_NAME = 'state.json'
 const PROFILES_DIR_NAME = 'profiles'
 const PLANS_DIR_NAME = 'plans'
 const SNAPSHOTS_DIR_NAME = 'snapshots'
+const RUNTIME_DIR_NAME = 'runtime'
+const RUNTIME_INDEX_FILE_NAME = 'index.json'
 
 export function resolveUserSkillGovernorRoot(homeDir: string): string {
   return join(homeDir, STORE_DIR_NAME)
@@ -48,6 +50,22 @@ export function resolvePlansDir(storeRoot: string): string {
 
 export function resolveSnapshotsDir(storeRoot: string): string {
   return join(storeRoot, SNAPSHOTS_DIR_NAME)
+}
+
+export function resolveRuntimeDir(storeRoot: string): string {
+  return join(storeRoot, RUNTIME_DIR_NAME)
+}
+
+export function resolveRuntimeIndexFilePath(storeRoot: string): string {
+  return join(resolveRuntimeDir(storeRoot), RUNTIME_INDEX_FILE_NAME)
+}
+
+export function resolveProviderRuntimeDir(storeRoot: string, provider: string): string {
+  return join(resolveRuntimeDir(storeRoot), sanitizeArtifactStem(provider))
+}
+
+export function resolveProviderRuntimeProjectionFilePath(storeRoot: string, provider: string): string {
+  return join(resolveProviderRuntimeDir(storeRoot, provider), RUNTIME_INDEX_FILE_NAME)
 }
 
 export function resolveProfileFilePath(storeRoot: string, profileName: string): string {

@@ -137,6 +137,40 @@ export interface SnapshotDocument {
   basedOnPlanId: string | null
 }
 
+export interface RuntimeProjectedSkill {
+  skillId: string
+  name: string
+  provider: Provider
+  sourceScope: SourceScope
+  path: string
+  entryFile: string
+  domain: string
+  derivedTags: string[]
+  resolvedMode: GovernanceMode
+  resolvedPriority: number
+  resolvedGovernanceScope: GovernanceScope
+  included: boolean
+  reasons: string[]
+}
+
+export interface ProviderRuntimeProjection {
+  version: 1
+  generatedAt: string
+  provider: Provider
+  activeProfile: string | null
+  planId: string | null
+  includedSkills: RuntimeProjectedSkill[]
+  excludedSkills: RuntimeProjectedSkill[]
+}
+
+export interface RuntimeProjectionSet {
+  version: 1
+  generatedAt: string
+  activeProfile: string | null
+  planId: string | null
+  providers: ProviderRuntimeProjection[]
+}
+
 export type JsonPrimitive = string | number | boolean | null
 
 export type JsonValue =

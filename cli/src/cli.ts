@@ -11,6 +11,7 @@ import { registerInspectCommand } from './commands/inspect.js'
 import { registerListCommand } from './commands/list.js'
 import { registerOptimizeCommand } from './commands/optimize.js'
 import { registerProfileUseCommand } from './commands/profile-use.js'
+import { registerProjectionCommand } from './commands/projection.js'
 import { registerReportCommand } from './commands/report.js'
 import { registerRollbackCommand } from './commands/rollback.js'
 import type { CliResult, GovernancePolicy, Provider, SourceScope } from './types.js'
@@ -45,6 +46,7 @@ export interface GovernanceCommandOptions extends RegistrySelectionOptions {
   scope?: SourceScope
   storeRoot?: string
   dryRun?: boolean
+  refresh?: boolean
 }
 
 export function buildCli(): Command {
@@ -62,6 +64,7 @@ export function buildCli(): Command {
   registerApplyCommand(program)
   registerRollbackCommand(program)
   registerProfileUseCommand(program)
+  registerProjectionCommand(program)
   registerReportCommand(program)
 
   return program

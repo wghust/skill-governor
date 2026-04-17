@@ -4291,10 +4291,13 @@ function renderFailureText(result) {
 // src/store/paths.ts
 var import_node_path6 = require("node:path");
 var STORE_DIR_NAME = ".skill-governor";
+var REGISTRY_FILE_NAME = "registry.json";
 var STATE_FILE_NAME = "state.json";
 var PROFILES_DIR_NAME = "profiles";
 var PLANS_DIR_NAME = "plans";
 var SNAPSHOTS_DIR_NAME = "snapshots";
+var RUNTIME_DIR_NAME = "runtime";
+var RUNTIME_INDEX_FILE_NAME = "index.json";
 function resolveUserSkillGovernorRoot(homeDir) {
   return (0, import_node_path6.join)(homeDir, STORE_DIR_NAME);
 }
@@ -4303,6 +4306,9 @@ function resolveWorkspaceSkillGovernorRoot(workspaceRoot) {
 }
 function resolveSkillGovernorRoot(scope, homeDir, workspaceRoot) {
   return scope === "user" ? resolveUserSkillGovernorRoot(homeDir) : resolveWorkspaceSkillGovernorRoot(workspaceRoot);
+}
+function resolveRegistryFilePath(storeRoot) {
+  return (0, import_node_path6.join)(storeRoot, REGISTRY_FILE_NAME);
 }
 function resolveStateFilePath(storeRoot) {
   return (0, import_node_path6.join)(storeRoot, STATE_FILE_NAME);
@@ -4315,6 +4321,18 @@ function resolvePlansDir(storeRoot) {
 }
 function resolveSnapshotsDir(storeRoot) {
   return (0, import_node_path6.join)(storeRoot, SNAPSHOTS_DIR_NAME);
+}
+function resolveRuntimeDir(storeRoot) {
+  return (0, import_node_path6.join)(storeRoot, RUNTIME_DIR_NAME);
+}
+function resolveRuntimeIndexFilePath(storeRoot) {
+  return (0, import_node_path6.join)(resolveRuntimeDir(storeRoot), RUNTIME_INDEX_FILE_NAME);
+}
+function resolveProviderRuntimeDir(storeRoot, provider) {
+  return (0, import_node_path6.join)(resolveRuntimeDir(storeRoot), sanitizeArtifactStem(provider));
+}
+function resolveProviderRuntimeProjectionFilePath(storeRoot, provider) {
+  return (0, import_node_path6.join)(resolveProviderRuntimeDir(storeRoot, provider), RUNTIME_INDEX_FILE_NAME);
 }
 function resolveProfileFilePath(storeRoot, profileName) {
   return (0, import_node_path6.join)(resolveProfilesDir(storeRoot), `${sanitizeArtifactStem(profileName)}.yaml`);
@@ -4331,7 +4349,7 @@ function sanitizeArtifactStem(value) {
 }
 
 // src/apply.ts
-var import_promises3 = require("node:fs/promises");
+var import_promises4 = require("node:fs/promises");
 
 // src/store/files.ts
 var import_promises2 = require("node:fs/promises");
@@ -4580,6 +4598,9 @@ function isPlainObject(value) {
 async function readGovernancePlan(storeRoot, planId) {
   return readJsonFile(resolvePlanFilePath(storeRoot, planId));
 }
+async function writeGovernancePlan(storeRoot, plan) {
+  await writeJsonFile(resolvePlanFilePath(storeRoot, plan.id), plan);
+}
 
 // src/store/snapshots.ts
 async function readSnapshotDocument(storeRoot, snapshotId) {
@@ -4605,6 +4626,12 @@ function buildSnapshotId() {
 }
 
 // src/store/state.ts
+async function readRegistryDocument(storeRoot) {
+  return readJsonFile(resolveRegistryFilePath(storeRoot));
+}
+async function writeRegistryDocument(storeRoot, registry) {
+  await writeJsonFile(resolveRegistryFilePath(storeRoot), registry);
+}
 async function readStateDocument(storeRoot) {
   return readJsonFile(resolveStateFilePath(storeRoot));
 }
@@ -4618,6 +4645,572 @@ async function readProfileDocument(storeRoot, profileName) {
 }
 async function writeProfileDocument(storeRoot, profile) {
   await writeYamlFile(resolveProfileFilePath(storeRoot, profile.name), profile);
+}
+
+// src/store/runtime.ts
+var import_promises3 = require("node:fs/promises");
+async function readRuntimeProjectionSet(storeRoot) {
+  return readJsonFile(resolveRuntimeIndexFilePath(storeRoot));
+}
+async function writeRuntimeProjectionSet(storeRoot, projectionSet) {
+  await (0, import_promises3.rm)(resolveRuntimeDir(storeRoot), { recursive: true, force: true });
+  await writeJsonFile(resolveRuntimeIndexFilePath(storeRoot), projectionSet);
+  for (const projection of projectionSet.providers) {
+    await writeJsonFile(
+      resolveProviderRuntimeProjectionFilePath(storeRoot, projection.provider),
+      projection
+    );
+  }
+}
+async function clearRuntimeProjectionSet(storeRoot) {
+  await (0, import_promises3.rm)(resolveRuntimeDir(storeRoot), { recursive: true, force: true });
+}
+
+// src/governance/policies.ts
+var CORE_NAME_MARKERS = [
+  "audit",
+  "cluster",
+  "core",
+  "dedupe",
+  "governance",
+  "governor",
+  "optimize",
+  "profile",
+  "registry"
+];
+var EXPERIMENTAL_MARKERS = [
+  "beta",
+  "experimental",
+  "lab",
+  "poc",
+  "prototype",
+  "sandbox",
+  "spike"
+];
+var PROJECT_MARKERS = [
+  "project",
+  "workspace",
+  "repo-specific",
+  "repo",
+  "task-specific"
+];
+var POLICY_CONFIGS = {
+  conservative: {
+    policy: "conservative",
+    duplicateThreshold: 0.8,
+    profileDefaults: {
+      mode: "manual",
+      priority: 60,
+      governanceScope: "workspace"
+    },
+    modeByTier: {
+      core: "auto",
+      domain: "manual",
+      project: "manual",
+      experimental: "off"
+    },
+    priorityByTier: {
+      core: 86,
+      domain: 72,
+      project: 58,
+      experimental: 12
+    },
+    workspacePriorityBonus: 6,
+    duplicatePrimaryPriorityBonus: 4,
+    duplicateSecondaryPriorityPenalty: 30,
+    duplicatePrimaryMode: "auto",
+    duplicateSecondaryMode: "off",
+    profileName: "conservative",
+    profileDescription: "Conservative governance profile generated from a dry-run optimize plan."
+  },
+  balanced: {
+    policy: "balanced",
+    duplicateThreshold: 0.7,
+    profileDefaults: {
+      mode: "manual",
+      priority: 55,
+      governanceScope: "workspace"
+    },
+    modeByTier: {
+      core: "auto",
+      domain: "auto",
+      project: "manual",
+      experimental: "off"
+    },
+    priorityByTier: {
+      core: 90,
+      domain: 78,
+      project: 64,
+      experimental: 10
+    },
+    workspacePriorityBonus: 8,
+    duplicatePrimaryPriorityBonus: 6,
+    duplicateSecondaryPriorityPenalty: 24,
+    duplicatePrimaryMode: "auto",
+    duplicateSecondaryMode: "manual",
+    profileName: "balanced",
+    profileDescription: "Balanced governance profile generated from a dry-run optimize plan."
+  },
+  aggressive: {
+    policy: "aggressive",
+    duplicateThreshold: 0.56,
+    profileDefaults: {
+      mode: "auto",
+      priority: 70,
+      governanceScope: "workspace"
+    },
+    modeByTier: {
+      core: "auto",
+      domain: "auto",
+      project: "auto",
+      experimental: "off"
+    },
+    priorityByTier: {
+      core: 96,
+      domain: 86,
+      project: 74,
+      experimental: 6
+    },
+    workspacePriorityBonus: 12,
+    duplicatePrimaryPriorityBonus: 8,
+    duplicateSecondaryPriorityPenalty: 34,
+    duplicatePrimaryMode: "auto",
+    duplicateSecondaryMode: "off",
+    profileName: "aggressive",
+    profileDescription: "Aggressive governance profile generated from a dry-run optimize plan."
+  }
+};
+function getPolicyConfig(policy) {
+  return POLICY_CONFIGS[policy];
+}
+function classifySkill(skill) {
+  const normalizedTokens = collectNormalizedTokens(skill);
+  if (matchesAny(normalizedTokens, EXPERIMENTAL_MARKERS)) {
+    return "experimental";
+  }
+  if (matchesAny(normalizedTokens, CORE_NAME_MARKERS) || matchesAny(skill.tags, CORE_NAME_MARKERS)) {
+    return "core";
+  }
+  if (skill.projects !== void 0 && skill.projects.length > 0 || matchesAny(normalizedTokens, PROJECT_MARKERS)) {
+    return "project";
+  }
+  return "domain";
+}
+function selectPrimarySkill(candidates, policy) {
+  if (candidates.length === 0) {
+    throw new Error(`Cannot select primary skill from an empty candidate list for policy ${policy}`);
+  }
+  const sorted = [...candidates].sort((left, right) => comparePrimarySkills(left, right, policy));
+  return sorted[0];
+}
+function buildTargetSide(skill, policy, role) {
+  const config = getPolicyConfig(policy);
+  const tier = classifySkill(skill);
+  const scope = config.profileDefaults.governanceScope;
+  const basePriority = config.priorityByTier[tier];
+  const sourceBonus = skill.sourceScope === "workspace" ? config.workspacePriorityBonus : 0;
+  const roleBonus = role === "primary" ? config.duplicatePrimaryPriorityBonus : role === "secondary" ? -config.duplicateSecondaryPriorityPenalty : 0;
+  return {
+    mode: role === "secondary" ? config.duplicateSecondaryMode : role === "primary" ? config.duplicatePrimaryMode : config.modeByTier[tier],
+    priority: clampPriority(basePriority + sourceBonus + roleBonus),
+    governanceScope: scope
+  };
+}
+function buildProfileDraft(policy, skills, duplicateGroups) {
+  const config = getPolicyConfig(policy);
+  const usedTiers = new Set(skills.map((skill) => classifySkill(skill)));
+  const rules = [];
+  rules.push({
+    match: {
+      tags: ["duplicate-secondary"]
+    },
+    set: {
+      mode: config.duplicateSecondaryMode,
+      priority: clampPriority(config.profileDefaults.priority - config.duplicateSecondaryPriorityPenalty),
+      governanceScope: config.profileDefaults.governanceScope
+    },
+    reason: [
+      "secondary skills from duplicate groups are demoted",
+      `policy:${config.policy}`
+    ]
+  });
+  for (const tier of ["core", "domain", "project", "experimental"]) {
+    if (!usedTiers.has(tier)) {
+      continue;
+    }
+    rules.push({
+      match: {
+        tags: [tier]
+      },
+      set: {
+        mode: config.modeByTier[tier],
+        priority: config.priorityByTier[tier],
+        governanceScope: config.profileDefaults.governanceScope
+      },
+      reason: [`classification tier:${tier}`, `policy:${config.policy}`]
+    });
+  }
+  if (skills.some((skill) => skill.sourceScope === "workspace")) {
+    rules.push({
+      match: {
+        sourceScope: ["workspace"]
+      },
+      set: {
+        priority: clampPriority(config.profileDefaults.priority + config.workspacePriorityBonus),
+        governanceScope: config.profileDefaults.governanceScope
+      },
+      reason: [
+        "workspace skills receive a higher precedence than user skills",
+        `policy:${config.policy}`
+      ]
+    });
+  }
+  if (duplicateGroups.length > 0) {
+    rules.push({
+      match: {
+        provider: ["cursor", "codex", "claude", "custom"]
+      },
+      set: {
+        governanceScope: config.profileDefaults.governanceScope
+      },
+      reason: [
+        `generated from ${duplicateGroups.length} duplicate group(s)`,
+        `policy:${config.policy}`
+      ]
+    });
+  }
+  return {
+    version: 1,
+    name: config.profileName,
+    description: config.profileDescription,
+    defaults: config.profileDefaults,
+    rules
+  };
+}
+function comparePrimarySkills(left, right, policy) {
+  const sourceScopeRank = compareSourceScopes(left.sourceScope, right.sourceScope);
+  if (sourceScopeRank !== 0) {
+    return sourceScopeRank;
+  }
+  const tierRank = compareTiers(classifySkill(left), classifySkill(right), policy);
+  if (tierRank !== 0) {
+    return tierRank;
+  }
+  const warningRank = left.metadata.parseWarnings.length - right.metadata.parseWarnings.length;
+  if (warningRank !== 0) {
+    return warningRank;
+  }
+  const modeRank = compareModes(left.currentMode, right.currentMode);
+  if (modeRank !== 0) {
+    return modeRank;
+  }
+  const priorityRank = right.currentPriority - left.currentPriority;
+  if (priorityRank !== 0) {
+    return priorityRank;
+  }
+  const nameRank = left.name.localeCompare(right.name);
+  if (nameRank !== 0) {
+    return nameRank;
+  }
+  return left.id.localeCompare(right.id);
+}
+function compareSourceScopes(left, right) {
+  if (left === right) {
+    return 0;
+  }
+  return left === "workspace" ? -1 : 1;
+}
+function compareTiers(left, right, policy) {
+  if (left === right) {
+    return 0;
+  }
+  const config = getPolicyConfig(policy);
+  const ranking = (() => {
+    switch (config.policy) {
+      case "conservative":
+        return {
+          core: 0,
+          domain: 1,
+          project: 2,
+          experimental: 3
+        };
+      case "balanced":
+        return {
+          core: 0,
+          domain: 1,
+          project: 2,
+          experimental: 3
+        };
+      case "aggressive":
+        return {
+          core: 0,
+          domain: 1,
+          project: 2,
+          experimental: 3
+        };
+      default:
+        return {
+          core: 0,
+          domain: 1,
+          project: 2,
+          experimental: 3
+        };
+    }
+  })();
+  return ranking[left] - ranking[right];
+}
+function compareModes(left, right) {
+  if (left === right) {
+    return 0;
+  }
+  const ranking = {
+    auto: 0,
+    manual: 1,
+    off: 2
+  };
+  return ranking[left] - ranking[right];
+}
+function collectNormalizedTokens(skill) {
+  const values = [
+    skill.name,
+    skill.description,
+    skill.domain,
+    skill.path,
+    skill.entryFile,
+    skill.fingerprints.nameNorm,
+    ...skill.tags,
+    ...skill.projects ?? []
+  ];
+  const tokens = /* @__PURE__ */ new Set();
+  for (const value of values) {
+    for (const token of tokenize(value)) {
+      tokens.add(token);
+    }
+  }
+  return [...tokens];
+}
+function matchesAny(values, markers) {
+  return values.some((value) => {
+    const normalized = normalizeToken(value);
+    return markers.some((marker) => normalized.includes(marker));
+  });
+}
+function tokenize(value) {
+  return value.toLowerCase().split(/[^a-z0-9]+/u).map((token) => token.trim()).filter((token) => token.length > 0);
+}
+function normalizeToken(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "");
+}
+function clampPriority(priority) {
+  if (Number.isNaN(priority)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round(priority)));
+}
+
+// src/runtime/resolve.ts
+async function refreshRuntimeProjections(input) {
+  const registry = input.registry ?? await readRegistryDocument(input.storeRoot);
+  if (registry === null) {
+    throw new GovernanceWorkflowError(
+      "REGISTRY_NOT_FOUND",
+      `Registry was not found in ${input.storeRoot}`
+    );
+  }
+  const state = input.state ?? await readStateDocument(input.storeRoot);
+  const projectionSet = await buildRuntimeProjectionSet({
+    storeRoot: input.storeRoot,
+    registry,
+    state,
+    generatedAt: input.generatedAt
+  });
+  if (projectionSet.providers.length === 0 && projectionSet.activeProfile === null) {
+    await clearRuntimeProjectionSet(input.storeRoot);
+    return projectionSet;
+  }
+  await writeRuntimeProjectionSet(input.storeRoot, projectionSet);
+  return projectionSet;
+}
+async function buildRuntimeProjectionSet(input) {
+  const generatedAt = input.generatedAt ?? (/* @__PURE__ */ new Date()).toISOString();
+  if (input.state === null || input.state.activeProfile === null) {
+    return {
+      version: 1,
+      generatedAt,
+      activeProfile: null,
+      planId: input.state?.lastAppliedPlanId ?? null,
+      providers: []
+    };
+  }
+  const profile = await readProfileDocument(input.storeRoot, input.state.activeProfile);
+  if (profile === null) {
+    throw new GovernanceWorkflowError(
+      "PROFILE_NOT_FOUND",
+      `Profile '${input.state.activeProfile}' was not found in ${input.storeRoot}`
+    );
+  }
+  const plan = input.state.lastAppliedPlanId !== null ? await readGovernancePlan(input.storeRoot, input.state.lastAppliedPlanId) : null;
+  const roleMap = buildRoleMap(plan);
+  const providers = resolveProviders(input.registry, input.state);
+  const allowedSources = new Set(input.state.selectedSources);
+  return {
+    version: 1,
+    generatedAt,
+    activeProfile: profile.name,
+    planId: input.state.lastAppliedPlanId,
+    providers: providers.map((provider) => buildProviderProjection({
+      provider,
+      generatedAt,
+      planId: input.state.lastAppliedPlanId,
+      activeProfile: profile.name,
+      profile,
+      skills: input.registry.skills.filter(
+        (skill) => skill.provider === provider && allowedSources.has(skill.sourceScope)
+      ),
+      roleMap
+    }))
+  };
+}
+function buildProviderProjection(input) {
+  const projected = input.skills.map((skill) => projectSkill(skill, input.profile, input.roleMap.get(skill.id))).sort(compareProjectedSkills);
+  return {
+    version: 1,
+    generatedAt: input.generatedAt,
+    provider: input.provider,
+    activeProfile: input.activeProfile,
+    planId: input.planId,
+    includedSkills: projected.filter((skill) => skill.included),
+    excludedSkills: projected.filter((skill) => !skill.included)
+  };
+}
+function projectSkill(skill, profile, roleContext) {
+  const derivedTags = deriveTags(skill, roleContext);
+  const resolved = {
+    mode: profile.defaults.mode,
+    priority: profile.defaults.priority,
+    governanceScope: profile.defaults.governanceScope
+  };
+  const reasons = [`active profile:${profile.name}`];
+  for (const rule of profile.rules) {
+    if (!matchesRule(rule.match, skill, derivedTags)) {
+      continue;
+    }
+    if (rule.set.mode !== void 0) {
+      resolved.mode = rule.set.mode;
+    }
+    if (rule.set.priority !== void 0) {
+      resolved.priority = rule.set.priority;
+    }
+    if (rule.set.governanceScope !== void 0) {
+      resolved.governanceScope = rule.set.governanceScope;
+    }
+    reasons.push(...rule.reason ?? ["matched profile rule"]);
+  }
+  if (roleContext?.target !== void 0) {
+    resolved.mode = roleContext.target.mode;
+    resolved.priority = roleContext.target.priority;
+    resolved.governanceScope = roleContext.target.governanceScope;
+    reasons.push("resolved from applied plan action");
+  }
+  if (roleContext !== void 0) {
+    reasons.push(...roleContext.reasons);
+  }
+  const included = resolved.mode !== "off";
+  reasons.push(included ? "included in runtime projection" : "excluded by resolved mode:off");
+  return {
+    skillId: skill.id,
+    name: skill.name,
+    provider: skill.provider,
+    sourceScope: skill.sourceScope,
+    path: skill.path,
+    entryFile: skill.entryFile,
+    domain: skill.domain,
+    derivedTags,
+    resolvedMode: resolved.mode,
+    resolvedPriority: resolved.priority,
+    resolvedGovernanceScope: resolved.governanceScope,
+    included,
+    reasons: [...new Set(reasons)]
+  };
+}
+function deriveTags(skill, roleContext) {
+  const tags = new Set(skill.tags);
+  tags.add(classifySkill(skill));
+  if (roleContext?.role === "primary") {
+    tags.add("duplicate-primary");
+  }
+  if (roleContext?.role === "secondary") {
+    tags.add("duplicate-secondary");
+  }
+  return [...tags].sort((left, right) => left.localeCompare(right));
+}
+function matchesRule(match, skill, derivedTags) {
+  if (match.provider !== void 0 && !match.provider.includes(skill.provider)) {
+    return false;
+  }
+  if (match.sourceScope !== void 0 && !match.sourceScope.includes(skill.sourceScope)) {
+    return false;
+  }
+  if (match.domain !== void 0 && !match.domain.includes(skill.domain)) {
+    return false;
+  }
+  if (match.tags !== void 0) {
+    const tagSet = new Set(derivedTags);
+    if (!match.tags.every((tag) => tagSet.has(tag))) {
+      return false;
+    }
+  }
+  if (match.projects !== void 0) {
+    const projects = new Set(skill.projects ?? []);
+    if (!match.projects.every((project) => projects.has(project))) {
+      return false;
+    }
+  }
+  return true;
+}
+function buildRoleMap(plan) {
+  const roleMap = /* @__PURE__ */ new Map();
+  for (const action of plan?.actions ?? []) {
+    const normalizedReasons = action.reason.map((reason) => reason.toLowerCase());
+    const role = normalizedReasons.some((reason) => reason.includes("duplicate primary selected")) ? "primary" : normalizedReasons.some((reason) => reason.includes("duplicate secondary demoted")) ? "secondary" : "normal";
+    roleMap.set(action.skillId, {
+      role,
+      reasons: [...action.reason],
+      target: {
+        mode: action.after.mode,
+        priority: action.after.priority,
+        governanceScope: action.after.governanceScope
+      }
+    });
+  }
+  return roleMap;
+}
+function resolveProviders(registry, state) {
+  const selected = state.selectedProviders.length > 0 ? state.selectedProviders : registry.providers;
+  return [...new Set(selected)].sort((left, right) => left.localeCompare(right));
+}
+function compareProjectedSkills(left, right) {
+  const includeRank = Number(right.included) - Number(left.included);
+  if (includeRank !== 0) {
+    return includeRank;
+  }
+  const modeRank = compareModes2(left.resolvedMode, right.resolvedMode);
+  if (modeRank !== 0) {
+    return modeRank;
+  }
+  const priorityRank = right.resolvedPriority - left.resolvedPriority;
+  if (priorityRank !== 0) {
+    return priorityRank;
+  }
+  return left.name.localeCompare(right.name) || left.skillId.localeCompare(right.skillId);
+}
+function compareModes2(left, right) {
+  const order = {
+    auto: 0,
+    manual: 1,
+    off: 2
+  };
+  return order[left] - order[right];
 }
 
 // src/apply.ts
@@ -4662,6 +5255,11 @@ async function applyPlan(input) {
   }
   const state = buildAppliedState(previousState, plan, input.now);
   await writeStateDocument(input.storeRoot, state);
+  await refreshRuntimeProjections({
+    storeRoot: input.storeRoot,
+    state,
+    generatedAt: state.updatedAt
+  });
   return {
     dryRun: false,
     applied: true,
@@ -4692,14 +5290,19 @@ async function rollbackSnapshot(input) {
     if (restoredProfileNames.has(profileName)) {
       continue;
     }
-    await (0, import_promises3.rm)(resolveProfileFilePath(input.storeRoot, profileName), { force: true });
+    await (0, import_promises4.rm)(resolveProfileFilePath(input.storeRoot, profileName), { force: true });
     removedProfiles.push(profileName);
   }
   if (snapshot.previousState === null) {
-    await (0, import_promises3.rm)(resolveStateFilePath(input.storeRoot), { force: true });
+    await (0, import_promises4.rm)(resolveStateFilePath(input.storeRoot), { force: true });
   } else {
     await writeStateDocument(input.storeRoot, snapshot.previousState);
   }
+  await refreshRuntimeProjections({
+    storeRoot: input.storeRoot,
+    state: snapshot.previousState,
+    generatedAt: input.now
+  });
   return {
     rolledBack: true,
     storeRoot: input.storeRoot,
@@ -4736,6 +5339,11 @@ async function activateProfile(input) {
     updatedAt: input.now ?? (/* @__PURE__ */ new Date()).toISOString()
   };
   await writeStateDocument(input.storeRoot, state);
+  await refreshRuntimeProjections({
+    storeRoot: input.storeRoot,
+    state,
+    generatedAt: state.updatedAt
+  });
   return {
     activated: true,
     storeRoot: input.storeRoot,
@@ -4774,7 +5382,7 @@ async function readLatestSnapshot(storeRoot) {
 async function readSnapshotDocuments(storeRoot) {
   const snapshotDir = resolveSnapshotsDir(storeRoot);
   try {
-    const entries = await (0, import_promises3.readdir)(snapshotDir, { withFileTypes: true });
+    const entries = await (0, import_promises4.readdir)(snapshotDir, { withFileTypes: true });
     const ids = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => entry.name.slice(0, -".json".length));
     const documents = await Promise.all(ids.map((snapshotId) => readSnapshotDocument(storeRoot, snapshotId)));
     return documents.filter((snapshot) => snapshot !== null);
@@ -4788,7 +5396,7 @@ async function readSnapshotDocuments(storeRoot) {
 async function readCurrentProfiles(storeRoot) {
   const profileDir = resolveProfilesDir(storeRoot);
   try {
-    const entries = await (0, import_promises3.readdir)(profileDir, { withFileTypes: true });
+    const entries = await (0, import_promises4.readdir)(profileDir, { withFileTypes: true });
     const names = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".yaml")).map((entry) => entry.name.slice(0, -".yaml".length));
     const documents = await Promise.all(names.map((profileName) => readProfileDocument(storeRoot, profileName)));
     return documents.filter((profile) => profile !== null);
@@ -5030,20 +5638,20 @@ function createCluster(domain, keyword, skills) {
 }
 function getClusterTokens(skill, domain) {
   const tokens = /* @__PURE__ */ new Set();
-  const domainToken = normalizeToken(domain);
-  for (const token of tokenize(skill.name)) {
+  const domainToken = normalizeToken2(domain);
+  for (const token of tokenize2(skill.name)) {
     addToken(tokens, token, domainToken);
   }
   for (const token of skill.tags) {
     addToken(tokens, token, domainToken);
   }
-  for (const token of tokenize(skill.description)) {
+  for (const token of tokenize2(skill.description)) {
     addToken(tokens, token, domainToken);
   }
   return tokens;
 }
 function addToken(tokens, token, domainToken) {
-  const normalized = normalizeToken(token);
+  const normalized = normalizeToken2(token);
   if (normalized.length === 0 || normalized === domainToken || GENERIC_KEYWORDS.has(normalized)) {
     return;
   }
@@ -5060,14 +5668,14 @@ function compareSkills(left, right) {
   }
   return left.id.localeCompare(right.id);
 }
-function tokenize(value) {
+function tokenize2(value) {
   return value.toLowerCase().split(/[^a-z0-9]+/u).map((token) => token.trim()).filter((token) => token.length > 0);
 }
-function normalizeToken(value) {
+function normalizeToken2(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "");
 }
 function normalizeDomain(value) {
-  const normalized = normalizeToken(value);
+  const normalized = normalizeToken2(value);
   return normalized.length > 0 ? normalized : "general";
 }
 
@@ -5173,10 +5781,10 @@ function compareDuplicateSkills(left, right) {
       reasons: ["normalized name equality"]
     };
   }
-  const leftNameTokens = new Set(tokenize2(left.fingerprints.nameNorm));
-  const rightNameTokens = new Set(tokenize2(right.fingerprints.nameNorm));
-  const leftDescriptionTokens = new Set(tokenize2(left.description));
-  const rightDescriptionTokens = new Set(tokenize2(right.description));
+  const leftNameTokens = new Set(tokenize3(left.fingerprints.nameNorm));
+  const rightNameTokens = new Set(tokenize3(right.fingerprints.nameNorm));
+  const leftDescriptionTokens = new Set(tokenize3(left.description));
+  const rightDescriptionTokens = new Set(tokenize3(right.description));
   const leftTagTokens = new Set(normalizeTokens(left.tags));
   const rightTagTokens = new Set(normalizeTokens(right.tags));
   const leftFingerprintTokens = new Set(normalizeTokens(left.fingerprints.tokenSet));
@@ -5264,11 +5872,11 @@ function calculateGroupScore(memberIndexes, pairScores) {
   return comparisons === 0 ? 0 : roundScore(score / comparisons);
 }
 function compareSkills2(left, right) {
-  const sourceScopeRank = compareSourceScopes(left.sourceScope, right.sourceScope);
+  const sourceScopeRank = compareSourceScopes2(left.sourceScope, right.sourceScope);
   if (sourceScopeRank !== 0) {
     return sourceScopeRank;
   }
-  const modeRank = compareModes(left.currentMode, right.currentMode);
+  const modeRank = compareModes3(left.currentMode, right.currentMode);
   if (modeRank !== 0) {
     return modeRank;
   }
@@ -5286,13 +5894,13 @@ function compareSkills2(left, right) {
   }
   return left.id.localeCompare(right.id);
 }
-function compareSourceScopes(left, right) {
+function compareSourceScopes2(left, right) {
   if (left === right) {
     return 0;
   }
   return left === "workspace" ? -1 : 1;
 }
-function compareModes(left, right) {
+function compareModes3(left, right) {
   if (left === right) {
     return 0;
   }
@@ -5319,7 +5927,7 @@ function find(parent, index) {
   }
   return parent[index];
 }
-function tokenize2(value) {
+function tokenize3(value) {
   return value.toLowerCase().split(/[^a-z0-9]+/u).map((token) => token.trim()).filter((token) => token.length > 0);
 }
 function normalizeTokens(tokens) {
@@ -5502,348 +6110,6 @@ function renderFailureText6(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
 
-// src/governance/policies.ts
-var CORE_NAME_MARKERS = [
-  "audit",
-  "cluster",
-  "core",
-  "dedupe",
-  "governance",
-  "governor",
-  "optimize",
-  "profile",
-  "registry"
-];
-var EXPERIMENTAL_MARKERS = [
-  "beta",
-  "experimental",
-  "lab",
-  "poc",
-  "prototype",
-  "sandbox",
-  "spike"
-];
-var PROJECT_MARKERS = [
-  "project",
-  "workspace",
-  "repo-specific",
-  "repo",
-  "task-specific"
-];
-var POLICY_CONFIGS = {
-  conservative: {
-    policy: "conservative",
-    duplicateThreshold: 0.8,
-    profileDefaults: {
-      mode: "manual",
-      priority: 60,
-      governanceScope: "workspace"
-    },
-    modeByTier: {
-      core: "auto",
-      domain: "manual",
-      project: "manual",
-      experimental: "off"
-    },
-    priorityByTier: {
-      core: 86,
-      domain: 72,
-      project: 58,
-      experimental: 12
-    },
-    workspacePriorityBonus: 6,
-    duplicatePrimaryPriorityBonus: 4,
-    duplicateSecondaryPriorityPenalty: 30,
-    duplicatePrimaryMode: "auto",
-    duplicateSecondaryMode: "off",
-    profileName: "conservative",
-    profileDescription: "Conservative governance profile generated from a dry-run optimize plan."
-  },
-  balanced: {
-    policy: "balanced",
-    duplicateThreshold: 0.7,
-    profileDefaults: {
-      mode: "manual",
-      priority: 55,
-      governanceScope: "workspace"
-    },
-    modeByTier: {
-      core: "auto",
-      domain: "auto",
-      project: "manual",
-      experimental: "off"
-    },
-    priorityByTier: {
-      core: 90,
-      domain: 78,
-      project: 64,
-      experimental: 10
-    },
-    workspacePriorityBonus: 8,
-    duplicatePrimaryPriorityBonus: 6,
-    duplicateSecondaryPriorityPenalty: 24,
-    duplicatePrimaryMode: "auto",
-    duplicateSecondaryMode: "manual",
-    profileName: "balanced",
-    profileDescription: "Balanced governance profile generated from a dry-run optimize plan."
-  },
-  aggressive: {
-    policy: "aggressive",
-    duplicateThreshold: 0.56,
-    profileDefaults: {
-      mode: "auto",
-      priority: 70,
-      governanceScope: "workspace"
-    },
-    modeByTier: {
-      core: "auto",
-      domain: "auto",
-      project: "auto",
-      experimental: "off"
-    },
-    priorityByTier: {
-      core: 96,
-      domain: 86,
-      project: 74,
-      experimental: 6
-    },
-    workspacePriorityBonus: 12,
-    duplicatePrimaryPriorityBonus: 8,
-    duplicateSecondaryPriorityPenalty: 34,
-    duplicatePrimaryMode: "auto",
-    duplicateSecondaryMode: "off",
-    profileName: "aggressive",
-    profileDescription: "Aggressive governance profile generated from a dry-run optimize plan."
-  }
-};
-function getPolicyConfig(policy) {
-  return POLICY_CONFIGS[policy];
-}
-function classifySkill(skill) {
-  const normalizedTokens = collectNormalizedTokens(skill);
-  if (matchesAny(normalizedTokens, EXPERIMENTAL_MARKERS)) {
-    return "experimental";
-  }
-  if (matchesAny(normalizedTokens, CORE_NAME_MARKERS) || matchesAny(skill.tags, CORE_NAME_MARKERS)) {
-    return "core";
-  }
-  if (skill.projects !== void 0 && skill.projects.length > 0 || matchesAny(normalizedTokens, PROJECT_MARKERS)) {
-    return "project";
-  }
-  return "domain";
-}
-function selectPrimarySkill(candidates, policy) {
-  if (candidates.length === 0) {
-    throw new Error(`Cannot select primary skill from an empty candidate list for policy ${policy}`);
-  }
-  const sorted = [...candidates].sort((left, right) => comparePrimarySkills(left, right, policy));
-  return sorted[0];
-}
-function buildTargetSide(skill, policy, role) {
-  const config = getPolicyConfig(policy);
-  const tier = classifySkill(skill);
-  const scope = config.profileDefaults.governanceScope;
-  const basePriority = config.priorityByTier[tier];
-  const sourceBonus = skill.sourceScope === "workspace" ? config.workspacePriorityBonus : 0;
-  const roleBonus = role === "primary" ? config.duplicatePrimaryPriorityBonus : role === "secondary" ? -config.duplicateSecondaryPriorityPenalty : 0;
-  return {
-    mode: role === "secondary" ? config.duplicateSecondaryMode : role === "primary" ? config.duplicatePrimaryMode : config.modeByTier[tier],
-    priority: clampPriority(basePriority + sourceBonus + roleBonus),
-    governanceScope: scope
-  };
-}
-function buildProfileDraft(policy, skills, duplicateGroups) {
-  const config = getPolicyConfig(policy);
-  const usedTiers = new Set(skills.map((skill) => classifySkill(skill)));
-  const rules = [];
-  rules.push({
-    match: {
-      tags: ["duplicate-secondary"]
-    },
-    set: {
-      mode: config.duplicateSecondaryMode,
-      priority: clampPriority(config.profileDefaults.priority - config.duplicateSecondaryPriorityPenalty),
-      governanceScope: config.profileDefaults.governanceScope
-    },
-    reason: [
-      "secondary skills from duplicate groups are demoted",
-      `policy:${config.policy}`
-    ]
-  });
-  for (const tier of ["core", "domain", "project", "experimental"]) {
-    if (!usedTiers.has(tier)) {
-      continue;
-    }
-    rules.push({
-      match: {
-        tags: [tier]
-      },
-      set: {
-        mode: config.modeByTier[tier],
-        priority: config.priorityByTier[tier],
-        governanceScope: config.profileDefaults.governanceScope
-      },
-      reason: [`classification tier:${tier}`, `policy:${config.policy}`]
-    });
-  }
-  if (skills.some((skill) => skill.sourceScope === "workspace")) {
-    rules.push({
-      match: {
-        sourceScope: ["workspace"]
-      },
-      set: {
-        priority: clampPriority(config.profileDefaults.priority + config.workspacePriorityBonus),
-        governanceScope: config.profileDefaults.governanceScope
-      },
-      reason: [
-        "workspace skills receive a higher precedence than user skills",
-        `policy:${config.policy}`
-      ]
-    });
-  }
-  if (duplicateGroups.length > 0) {
-    rules.push({
-      match: {
-        provider: ["cursor", "codex", "claude", "custom"]
-      },
-      set: {
-        governanceScope: config.profileDefaults.governanceScope
-      },
-      reason: [
-        `generated from ${duplicateGroups.length} duplicate group(s)`,
-        `policy:${config.policy}`
-      ]
-    });
-  }
-  return {
-    version: 1,
-    name: config.profileName,
-    description: config.profileDescription,
-    defaults: config.profileDefaults,
-    rules
-  };
-}
-function comparePrimarySkills(left, right, policy) {
-  const sourceScopeRank = compareSourceScopes2(left.sourceScope, right.sourceScope);
-  if (sourceScopeRank !== 0) {
-    return sourceScopeRank;
-  }
-  const tierRank = compareTiers(classifySkill(left), classifySkill(right), policy);
-  if (tierRank !== 0) {
-    return tierRank;
-  }
-  const warningRank = left.metadata.parseWarnings.length - right.metadata.parseWarnings.length;
-  if (warningRank !== 0) {
-    return warningRank;
-  }
-  const modeRank = compareModes2(left.currentMode, right.currentMode);
-  if (modeRank !== 0) {
-    return modeRank;
-  }
-  const priorityRank = right.currentPriority - left.currentPriority;
-  if (priorityRank !== 0) {
-    return priorityRank;
-  }
-  const nameRank = left.name.localeCompare(right.name);
-  if (nameRank !== 0) {
-    return nameRank;
-  }
-  return left.id.localeCompare(right.id);
-}
-function compareSourceScopes2(left, right) {
-  if (left === right) {
-    return 0;
-  }
-  return left === "workspace" ? -1 : 1;
-}
-function compareTiers(left, right, policy) {
-  if (left === right) {
-    return 0;
-  }
-  const config = getPolicyConfig(policy);
-  const ranking = (() => {
-    switch (config.policy) {
-      case "conservative":
-        return {
-          core: 0,
-          domain: 1,
-          project: 2,
-          experimental: 3
-        };
-      case "balanced":
-        return {
-          core: 0,
-          domain: 1,
-          project: 2,
-          experimental: 3
-        };
-      case "aggressive":
-        return {
-          core: 0,
-          domain: 1,
-          project: 2,
-          experimental: 3
-        };
-      default:
-        return {
-          core: 0,
-          domain: 1,
-          project: 2,
-          experimental: 3
-        };
-    }
-  })();
-  return ranking[left] - ranking[right];
-}
-function compareModes2(left, right) {
-  if (left === right) {
-    return 0;
-  }
-  const ranking = {
-    auto: 0,
-    manual: 1,
-    off: 2
-  };
-  return ranking[left] - ranking[right];
-}
-function collectNormalizedTokens(skill) {
-  const values = [
-    skill.name,
-    skill.description,
-    skill.domain,
-    skill.path,
-    skill.entryFile,
-    skill.fingerprints.nameNorm,
-    ...skill.tags,
-    ...skill.projects ?? []
-  ];
-  const tokens = /* @__PURE__ */ new Set();
-  for (const value of values) {
-    for (const token of tokenize3(value)) {
-      tokens.add(token);
-    }
-  }
-  return [...tokens];
-}
-function matchesAny(values, markers) {
-  return values.some((value) => {
-    const normalized = normalizeToken2(value);
-    return markers.some((marker) => normalized.includes(marker));
-  });
-}
-function tokenize3(value) {
-  return value.toLowerCase().split(/[^a-z0-9]+/u).map((token) => token.trim()).filter((token) => token.length > 0);
-}
-function normalizeToken2(value) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "");
-}
-function clampPriority(priority) {
-  if (Number.isNaN(priority)) {
-    return 0;
-  }
-  return Math.max(0, Math.min(100, Math.round(priority)));
-}
-
 // src/governance/optimize.ts
 function createGovernancePlan(registry, policy = "balanced") {
   const config = getPolicyConfig(policy);
@@ -5950,7 +6216,7 @@ function compareActions(left, right) {
   if (roleRank !== 0) {
     return roleRank;
   }
-  const modeRank = compareModes3(left.after.mode, right.after.mode);
+  const modeRank = compareModes4(left.after.mode, right.after.mode);
   if (modeRank !== 0) {
     return modeRank;
   }
@@ -5974,7 +6240,7 @@ function getActionRank(action) {
   }
   return 2;
 }
-function compareModes3(left, right) {
+function compareModes4(left, right) {
   if (left === right) {
     return 0;
   }
@@ -5995,23 +6261,32 @@ function buildPlanId(policy) {
 
 // src/commands/optimize.ts
 function registerOptimizeCommand(program2) {
-  const command = program2.command("optimize").description("Generate a governance plan").option("--policy <policy>", "governance policy", "balanced").option("--dry-run", "preview without writing changes", true).option("--workspace-root <path>", "workspace root to scan").option("--home-dir <path>", "home directory to scan").option("--provider <provider...>", "limit scanning to one or more providers").option("--source-scope <scope...>", "limit scanning to user or workspace scope").option("--format <format>", "output format", "text");
+  const command = program2.command("optimize").description("Generate a governance plan").option("--policy <policy>", "governance policy", "balanced").option("--dry-run", "preview without writing changes", true).option("--scope <scope>", "target scope for persisted plans", "workspace").option("--store-root <path>", "store root override for persisted plans").option("--workspace-root <path>", "workspace root to scan").option("--home-dir <path>", "home directory to scan").option("--provider <provider...>", "limit scanning to one or more providers").option("--source-scope <scope...>", "limit scanning to user or workspace scope").option("--format <format>", "output format", "text");
   command.action(async (options) => {
     try {
       const registry = await scanAndNormalizeRegistry(buildRegistryScanOptions(options));
       const policy = normalizePolicy(options.policy);
       const plan = createGovernancePlan(registry, policy);
+      const storeRoot = resolveTargetStoreRoot2(options);
+      await writeRegistryDocument(storeRoot, registry);
+      await writeGovernancePlan(storeRoot, plan);
       emitResult(
         success({
           ...plan,
+          storeRoot,
           dryRun: options.dryRun !== false
         }),
         resolveFormat(options.format),
         renderOptimizeText
       );
     } catch (error) {
+      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
       emitResult(
-        failure("OPTIMIZE_FAILED", error instanceof Error ? error.message : "Failed to optimize skills"),
+        failure(
+          workflowError?.code ?? "OPTIMIZE_FAILED",
+          error instanceof Error ? error.message : "Failed to optimize skills",
+          normalizeDetails2(workflowError?.details)
+        ),
         resolveFormat(options.format),
         renderFailureText7
       );
@@ -6033,6 +6308,7 @@ function renderOptimizeText(result) {
     `Plan: ${result.data.id}`,
     `Policy: ${result.data.policy}`,
     `Dry run: ${result.data.dryRun}`,
+    `Store root: ${result.data.storeRoot}`,
     `Total skills: ${result.data.summary.totalSkills}`,
     `Changed skills: ${result.data.summary.changedSkills}`,
     `Duplicate groups: ${result.data.summary.duplicateGroups}`,
@@ -6042,6 +6318,20 @@ function renderOptimizeText(result) {
 function renderFailureText7(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
+function resolveTargetStoreRoot2(options) {
+  if (options.storeRoot?.trim()) {
+    return options.storeRoot.trim();
+  }
+  const scope = options.scope === "user" ? "user" : "workspace";
+  return resolveSkillGovernorRoot(
+    scope,
+    resolveHomeDir(options),
+    resolveWorkspaceRoot(options)
+  );
+}
+function normalizeDetails2(details) {
+  return details === void 0 ? void 0 : details;
+}
 
 // src/commands/profile-use.ts
 function registerProfileUseCommand(program2) {
@@ -6049,7 +6339,7 @@ function registerProfileUseCommand(program2) {
   const command = profile.command("use").description("Activate a governance profile").argument("<name>", "profile name to activate").option("--scope <scope>", "target scope for profile activation").option("--home-dir <path>", "home directory for scope resolution").option("--workspace-root <path>", "workspace root for scope resolution").option("--store-root <path>", "store root override for profile activation").option("--format <format>", "output format", "text");
   command.action(async (name, options) => {
     try {
-      const storeRoot = resolveTargetStoreRoot2(options);
+      const storeRoot = resolveTargetStoreRoot3(options);
       const result = await activateProfile({ storeRoot, profileName: name });
       emitResult(
         success(result),
@@ -6062,7 +6352,7 @@ function registerProfileUseCommand(program2) {
         failure(
           workflowError?.code ?? "PROFILE_USE_FAILED",
           error instanceof Error ? error.message : "Failed to activate profile",
-          normalizeDetails2(workflowError?.details)
+          normalizeDetails3(workflowError?.details)
         ),
         resolveFormat(options.format),
         renderFailureText8
@@ -6085,112 +6375,6 @@ function renderProfileUseText(result) {
 function renderFailureText8(result) {
   return [`${result.error.code}: ${result.error.message}`];
 }
-function resolveTargetStoreRoot2(options) {
-  if (options.storeRoot?.trim()) {
-    return options.storeRoot.trim();
-  }
-  if (options.scope === "user" || options.scope === "workspace") {
-    return resolveSkillGovernorRoot(
-      options.scope,
-      resolveHomeDir(options),
-      resolveWorkspaceRoot(options)
-    );
-  }
-  throw new GovernanceWorkflowError(
-    "STORE_ROOT_REQUIRED",
-    "Use --store-root or select a scope with --scope user|workspace."
-  );
-}
-function normalizeDetails2(details) {
-  return details === void 0 ? void 0 : details;
-}
-
-// src/commands/report.ts
-function registerReportCommand(program2) {
-  const command = program2.command("report").description("Generate a governance report").option("--workspace-root <path>", "workspace root to scan").option("--home-dir <path>", "home directory to scan").option("--provider <provider...>", "limit scanning to one or more providers").option("--source-scope <scope...>", "limit scanning to user or workspace scope").option("--format <format>", "output format", "text");
-  command.action(async (options) => {
-    try {
-      const registry = await scanAndNormalizeRegistry(buildRegistryScanOptions(options));
-      const audit = createAuditSummary(registry.skills);
-      const duplicateGroups = findDuplicateGroups(registry.skills);
-      const clusters = createSkillClusters(registry.skills);
-      emitResult(
-        success({
-          generatedAt: registry.generatedAt,
-          workspaceRoot: registry.workspaceRoot,
-          audit,
-          duplicateGroups: duplicateGroups.groups,
-          clusters
-        }),
-        resolveFormat(options.format),
-        renderReportText
-      );
-    } catch (error) {
-      emitResult(
-        failure("REPORT_FAILED", error instanceof Error ? error.message : "Failed to generate report"),
-        resolveFormat(options.format),
-        renderFailureText9
-      );
-    }
-  });
-  return command;
-}
-function renderReportText(result) {
-  if (!result.ok) {
-    return renderFailureText9(result);
-  }
-  return [
-    `Workspace: ${result.data.workspaceRoot}`,
-    `Generated at: ${result.data.generatedAt}`,
-    `Total skills: ${result.data.audit.totalSkills}`,
-    `Duplicate groups: ${result.data.duplicateGroups.length}`,
-    `Clusters: ${result.data.clusters.domainCount} domains / ${result.data.clusters.keywordCount} keyword clusters`,
-    `Warnings: ${result.data.audit.warningCount}`
-  ];
-}
-function renderFailureText9(result) {
-  return [`${result.error.code}: ${result.error.message}`];
-}
-
-// src/commands/rollback.ts
-function registerRollbackCommand(program2) {
-  const command = program2.command("rollback").description("Rollback a governance snapshot").argument("[snapshot]", "snapshot id or path to restore").option("--scope <scope>", "target scope for rollback").option("--home-dir <path>", "home directory for scope resolution").option("--workspace-root <path>", "workspace root for scope resolution").option("--store-root <path>", "store root override for rollback").option("--format <format>", "output format", "text");
-  command.action(async (snapshot, options) => {
-    try {
-      const storeRoot = resolveTargetStoreRoot3(options);
-      const snapshotId = snapshot ?? options.snapshot ?? void 0;
-      const result = await rollbackSnapshot({ storeRoot, snapshotId });
-      emitResult(success(result), resolveFormat(options.format), renderRollbackText);
-    } catch (error) {
-      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
-      emitResult(
-        failure(
-          workflowError?.code ?? "ROLLBACK_FAILED",
-          error instanceof Error ? error.message : "Failed to rollback snapshot",
-          normalizeDetails3(workflowError?.details)
-        ),
-        resolveFormat(options.format),
-        renderFailureText10
-      );
-    }
-  });
-  return command;
-}
-function renderRollbackText(result) {
-  if (!result.ok) {
-    return renderFailureText10(result);
-  }
-  return [
-    `Rolled back: ${result.data.rolledBack}`,
-    `Snapshot: ${result.data.snapshot.snapshotId}`,
-    `Store root: ${result.data.storeRoot}`,
-    `Restored profiles: ${result.data.restoredProfiles.join(", ") || "none"}`,
-    `Removed profiles: ${result.data.removedProfiles.join(", ") || "none"}`
-  ];
-}
-function renderFailureText10(result) {
-  return [`${result.error.code}: ${result.error.message}`];
-}
 function resolveTargetStoreRoot3(options) {
   if (options.storeRoot?.trim()) {
     return options.storeRoot.trim();
@@ -6211,6 +6395,211 @@ function normalizeDetails3(details) {
   return details === void 0 ? void 0 : details;
 }
 
+// src/commands/projection.ts
+function registerProjectionCommand(program2) {
+  const command = program2.command("projection").description("Inspect or refresh runtime projections").option("--refresh", "rescan skills before generating runtime projections").option("--scope <scope>", "target scope for projection artifacts", "workspace").option("--store-root <path>", "store root override for runtime projections").option("--workspace-root <path>", "workspace root to scan").option("--home-dir <path>", "home directory to scan").option("--provider <provider...>", "limit scanning to one or more providers").option("--source-scope <scope...>", "limit scanning to user or workspace scope").option("--format <format>", "output format", "text");
+  command.action(async (options) => {
+    try {
+      const storeRoot = resolveTargetStoreRoot4(options);
+      const registry = await resolveProjectionRegistry(storeRoot, options);
+      const projectionSet = await refreshRuntimeProjections({ storeRoot, registry });
+      emitResult(
+        success(projectionSet),
+        resolveFormat(options.format),
+        renderProjectionText
+      );
+    } catch (error) {
+      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
+      emitResult(
+        failure(
+          workflowError?.code ?? "PROJECTION_FAILED",
+          error instanceof Error ? error.message : "Failed to generate runtime projections",
+          normalizeDetails4(workflowError?.details)
+        ),
+        resolveFormat(options.format),
+        renderFailureText9
+      );
+    }
+  });
+  return command;
+}
+async function resolveProjectionRegistry(storeRoot, options) {
+  if (options.refresh === true) {
+    const registry2 = await scanAndNormalizeRegistry(buildRegistryScanOptions(options));
+    await writeRegistryDocument(storeRoot, registry2);
+    return registry2;
+  }
+  const existing = await readRegistryDocument(storeRoot);
+  if (existing !== null) {
+    return existing;
+  }
+  const registry = await scanAndNormalizeRegistry(buildRegistryScanOptions(options));
+  await writeRegistryDocument(storeRoot, registry);
+  return registry;
+}
+function renderProjectionText(result) {
+  if (!result.ok) {
+    return renderFailureText9(result);
+  }
+  const providers = result.data.providers.map(
+    (projection) => `${projection.provider}: ${projection.includedSkills.length} included / ${projection.excludedSkills.length} excluded`
+  );
+  return [
+    `Generated at: ${result.data.generatedAt}`,
+    `Active profile: ${result.data.activeProfile ?? "none"}`,
+    `Plan: ${result.data.planId ?? "none"}`,
+    `Providers: ${providers.join(", ") || "none"}`
+  ];
+}
+function renderFailureText9(result) {
+  return [`${result.error.code}: ${result.error.message}`];
+}
+function resolveTargetStoreRoot4(options) {
+  if (options.storeRoot?.trim()) {
+    return options.storeRoot.trim();
+  }
+  const scope = options.scope === "user" ? "user" : "workspace";
+  return resolveSkillGovernorRoot(
+    scope,
+    resolveHomeDir(options),
+    resolveWorkspaceRoot(options)
+  );
+}
+function normalizeDetails4(details) {
+  return details === void 0 ? void 0 : details;
+}
+
+// src/commands/report.ts
+function registerReportCommand(program2) {
+  const command = program2.command("report").description("Generate a governance report").option("--scope <scope>", "target scope for runtime projection summary", "workspace").option("--store-root <path>", "store root override for runtime projection summary").option("--workspace-root <path>", "workspace root to scan").option("--home-dir <path>", "home directory to scan").option("--provider <provider...>", "limit scanning to one or more providers").option("--source-scope <scope...>", "limit scanning to user or workspace scope").option("--format <format>", "output format", "text");
+  command.action(async (options) => {
+    try {
+      const registry = await scanAndNormalizeRegistry(buildRegistryScanOptions(options));
+      const audit = createAuditSummary(registry.skills);
+      const duplicateGroups = findDuplicateGroups(registry.skills);
+      const clusters = createSkillClusters(registry.skills);
+      const runtimeProjection = await readRuntimeProjectionSet(resolveTargetStoreRoot5(options));
+      emitResult(
+        success({
+          generatedAt: registry.generatedAt,
+          workspaceRoot: registry.workspaceRoot,
+          audit,
+          duplicateGroups: duplicateGroups.groups,
+          clusters,
+          runtimeProjection: runtimeProjection === null ? null : {
+            activeProfile: runtimeProjection.activeProfile,
+            planId: runtimeProjection.planId,
+            byProvider: Object.fromEntries(runtimeProjection.providers.map((projection) => [
+              projection.provider,
+              {
+                included: projection.includedSkills.length,
+                excluded: projection.excludedSkills.length
+              }
+            ]))
+          }
+        }),
+        resolveFormat(options.format),
+        renderReportText
+      );
+    } catch (error) {
+      emitResult(
+        failure("REPORT_FAILED", error instanceof Error ? error.message : "Failed to generate report"),
+        resolveFormat(options.format),
+        renderFailureText10
+      );
+    }
+  });
+  return command;
+}
+function renderReportText(result) {
+  if (!result.ok) {
+    return renderFailureText10(result);
+  }
+  const projectionSummary = result.data.runtimeProjection === null ? "none" : Object.entries(result.data.runtimeProjection.byProvider).map(([provider, counts]) => `${provider}: ${counts.included} included / ${counts.excluded} excluded`).join(", ") || "none";
+  return [
+    `Workspace: ${result.data.workspaceRoot}`,
+    `Generated at: ${result.data.generatedAt}`,
+    `Total skills: ${result.data.audit.totalSkills}`,
+    `Duplicate groups: ${result.data.duplicateGroups.length}`,
+    `Clusters: ${result.data.clusters.domainCount} domains / ${result.data.clusters.keywordCount} keyword clusters`,
+    `Warnings: ${result.data.audit.warningCount}`,
+    `Runtime projection: ${projectionSummary}`
+  ];
+}
+function renderFailureText10(result) {
+  return [`${result.error.code}: ${result.error.message}`];
+}
+function resolveTargetStoreRoot5(options) {
+  if (options.storeRoot?.trim()) {
+    return options.storeRoot.trim();
+  }
+  const scope = options.scope === "user" ? "user" : "workspace";
+  return resolveSkillGovernorRoot(
+    scope,
+    resolveHomeDir(options),
+    resolveWorkspaceRoot(options)
+  );
+}
+
+// src/commands/rollback.ts
+function registerRollbackCommand(program2) {
+  const command = program2.command("rollback").description("Rollback a governance snapshot").argument("[snapshot]", "snapshot id or path to restore").option("--scope <scope>", "target scope for rollback").option("--home-dir <path>", "home directory for scope resolution").option("--workspace-root <path>", "workspace root for scope resolution").option("--store-root <path>", "store root override for rollback").option("--format <format>", "output format", "text");
+  command.action(async (snapshot, options) => {
+    try {
+      const storeRoot = resolveTargetStoreRoot6(options);
+      const snapshotId = snapshot ?? options.snapshot ?? void 0;
+      const result = await rollbackSnapshot({ storeRoot, snapshotId });
+      emitResult(success(result), resolveFormat(options.format), renderRollbackText);
+    } catch (error) {
+      const workflowError = error instanceof GovernanceWorkflowError ? error : null;
+      emitResult(
+        failure(
+          workflowError?.code ?? "ROLLBACK_FAILED",
+          error instanceof Error ? error.message : "Failed to rollback snapshot",
+          normalizeDetails5(workflowError?.details)
+        ),
+        resolveFormat(options.format),
+        renderFailureText11
+      );
+    }
+  });
+  return command;
+}
+function renderRollbackText(result) {
+  if (!result.ok) {
+    return renderFailureText11(result);
+  }
+  return [
+    `Rolled back: ${result.data.rolledBack}`,
+    `Snapshot: ${result.data.snapshot.snapshotId}`,
+    `Store root: ${result.data.storeRoot}`,
+    `Restored profiles: ${result.data.restoredProfiles.join(", ") || "none"}`,
+    `Removed profiles: ${result.data.removedProfiles.join(", ") || "none"}`
+  ];
+}
+function renderFailureText11(result) {
+  return [`${result.error.code}: ${result.error.message}`];
+}
+function resolveTargetStoreRoot6(options) {
+  if (options.storeRoot?.trim()) {
+    return options.storeRoot.trim();
+  }
+  if (options.scope === "user" || options.scope === "workspace") {
+    return resolveSkillGovernorRoot(
+      options.scope,
+      resolveHomeDir(options),
+      resolveWorkspaceRoot(options)
+    );
+  }
+  throw new GovernanceWorkflowError(
+    "STORE_ROOT_REQUIRED",
+    "Use --store-root or select a scope with --scope user|workspace."
+  );
+}
+function normalizeDetails5(details) {
+  return details === void 0 ? void 0 : details;
+}
+
 // src/cli.ts
 var runtimeProcess = globalThis.process;
 function buildCli() {
@@ -6224,6 +6613,7 @@ function buildCli() {
   registerApplyCommand(program2);
   registerRollbackCommand(program2);
   registerProfileUseCommand(program2);
+  registerProjectionCommand(program2);
   registerReportCommand(program2);
   return program2;
 }

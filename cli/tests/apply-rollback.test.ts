@@ -11,6 +11,8 @@ import { writeGovernancePlan } from '../src/store/plans.js'
 import { readProfileDocument, writeProfileDocument } from '../src/store/profiles.js'
 import { readSnapshotDocument } from '../src/store/snapshots.js'
 import { readStateDocument, writeStateDocument } from '../src/store/state.js'
+import { readRuntimeProjectionSet } from '../src/store/runtime.js'
+import { writeRegistryDocument } from '../src/store/state.js'
 
 async function createFixture(): Promise<{
   baseDir: string
@@ -20,6 +22,42 @@ async function createFixture(): Promise<{
   return {
     baseDir,
     storeRoot: join(baseDir, '.skill-governor'),
+  }
+}
+
+function createRegistry() {
+  return {
+    version: 1 as const,
+    generatedAt: '2026-04-17T00:00:00.000Z',
+    workspaceRoot: '/workspace',
+    sources: { user: true, workspace: false },
+    providers: ['codex'],
+    skills: [
+      {
+        id: 'minimal-skill',
+        name: 'minimal',
+        description: 'Minimal skill',
+        provider: 'codex' as const,
+        sourceScope: 'user' as const,
+        path: '/skills/minimal',
+        entryFile: '/skills/minimal/SKILL.md',
+        domain: 'general',
+        tags: ['minimal'],
+        currentMode: 'manual' as const,
+        currentPriority: 50,
+        currentGovernanceScope: 'workspace' as const,
+        fingerprints: {
+          nameNorm: 'minimal',
+          descHash: 'hash',
+          tokenSet: ['minimal'],
+        },
+        metadata: {
+          parseWarnings: [],
+          inferred: false,
+          discoveredAt: '2026-04-17T00:00:00.000Z',
+        },
+      },
+    ],
   }
 }
 
@@ -120,6 +158,7 @@ describe('apply and rollback orchestration', () => {
     const plan = createPlan('plan-001', minimalProfile, 1, '2026-04-17T00:05:00.000Z')
 
     try {
+      await writeRegistryDocument(fixture.storeRoot, createRegistry())
       await writeProfileDocument(fixture.storeRoot, legacyProfile)
       await writeStateDocument(fixture.storeRoot, initialState)
       await writeGovernancePlan(fixture.storeRoot, plan)
@@ -148,6 +187,7 @@ describe('apply and rollback orchestration', () => {
       expect(await readStateDocument(fixture.storeRoot)).toEqual(result.state)
       expect(await readProfileDocument(fixture.storeRoot, 'minimal')).toEqual(minimalProfile)
       expect(await readProfileDocument(fixture.storeRoot, 'legacy')).toEqual(legacyProfile)
+      expect((await readRuntimeProjectionSet(fixture.storeRoot))?.activeProfile).toBe('minimal')
     } finally {
       await rm(fixture.baseDir, { recursive: true, force: true })
     }
@@ -170,6 +210,7 @@ describe('apply and rollback orchestration', () => {
     const secondPlan = createPlan('plan-002', focusProfile, 1, '2026-04-17T00:20:00.000Z')
 
     try {
+      await writeRegistryDocument(fixture.storeRoot, createRegistry())
       await writeProfileDocument(fixture.storeRoot, legacyProfile)
       await writeStateDocument(fixture.storeRoot, initialState)
       await writeGovernancePlan(fixture.storeRoot, firstPlan)
@@ -204,6 +245,7 @@ describe('apply and rollback orchestration', () => {
       expect(await readProfileDocument(fixture.storeRoot, 'legacy')).toEqual(legacyProfile)
       expect(await readProfileDocument(fixture.storeRoot, 'minimal')).toEqual(minimalProfile)
       expect(await readProfileDocument(fixture.storeRoot, 'focus')).toBeNull()
+      expect((await readRuntimeProjectionSet(fixture.storeRoot))?.activeProfile).toBe('minimal')
     } finally {
       await rm(fixture.baseDir, { recursive: true, force: true })
     }
