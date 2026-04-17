@@ -12,6 +12,7 @@
   },
   "include": [
     "src/apply.ts",
+    "src/bin.ts",
     "src/cli.ts",
     "src/contracts.ts",
     "src/index.ts",

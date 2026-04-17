@@ -1,7 +1,7 @@
 # Skill: skill-governor
 
 ## Description
-Use this repository-root skill as the primary interface for governing local skill systems across `codex`, `cursor`, and `claude` providers. The CLI exists as this skill's execution engine.
+Use this repository-root skill as the primary interface for governing local skill systems across `codex`, `cursor`, and `claude` providers. The runtime entrypoint is `bin/skill-governor`.
 
 ## Capabilities
 - List discovered skills across user and workspace scopes
@@ -17,25 +17,25 @@ Use this repository-root skill as the primary interface for governing local skil
 
 ## Intent Mapping
 - "治理一下我的 skill"
-  - `skill-governor optimize --policy conservative --format json`
+  - `bin/skill-governor optimize --policy conservative --format json`
 - "看看有哪些重复 skill"
-  - `skill-governor dedupe --format json`
+  - `bin/skill-governor dedupe --format json`
 - "列出所有 skill"
-  - `skill-governor list --format json`
+  - `bin/skill-governor list --format json`
 - "列出 workspace 的 codex skill"
-  - `skill-governor list --provider codex --source-scope workspace --format json`
+  - `bin/skill-governor list --provider codex --source-scope workspace --format json`
 - "审计一下当前 skill 状态"
-  - `skill-governor audit --format json`
+  - `bin/skill-governor audit --format json`
 - "切换到 minimal 模式"
-  - `skill-governor profile use minimal --scope workspace --format json`
+  - `bin/skill-governor profile use minimal --scope workspace --format json`
 - "应用 plan-123"
-  - `skill-governor apply --plan plan-123 --scope workspace --format json`
+  - `bin/skill-governor apply --plan plan-123 --scope workspace --format json`
 - "回滚上一次治理"
-  - `skill-governor rollback --scope workspace --format json`
+  - `bin/skill-governor rollback --scope workspace --format json`
 
 ## CLI Rules
 - Treat this `SKILL.md` as the primary product interface.
-- Always call the project CLI as the execution engine, not direct filesystem mutations.
+- Always call `bin/skill-governor` as the execution engine, not direct filesystem mutations.
 - Prefer `--format json` so the model can interpret stable results.
 - Pass `--provider` and `--source-scope` when the user narrows the target set.
 - Pass `--scope user|workspace` or `--store-root <path>` for state-changing commands.
@@ -44,7 +44,7 @@ Use this repository-root skill as the primary interface for governing local skil
 
 ## Execution Flow
 1. Parse the user request into one governance intent.
-2. Map the intent to an allowlisted `skill-governor` CLI command.
+2. Map the intent to an allowlisted `bin/skill-governor` command.
 3. For mutating requests, run a preview or read step first.
 4. Read the CLI JSON output.
 5. Summarize the result for the user.
@@ -63,9 +63,9 @@ User:
 `/skill-governor 将我本地的全局 skill 治理一下`
 
 Assistant:
-1. Run `skill-governor optimize --policy conservative --format json`
+1. Run `bin/skill-governor optimize --policy conservative --format json`
 2. Summarize duplicate groups, changed skill count, and profile drafts
-3. Ask whether to run `skill-governor apply --plan <plan-id> --scope workspace --format json`
+3. Ask whether to run `bin/skill-governor apply --plan <plan-id> --scope workspace --format json`
 
 ## Output Expectations
 - Prefer concise summaries backed by JSON output.

@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "bin": {
-    "skill-governor": "./dist/index.js"
+    "skill-governor": "./dist/bin.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run build:cli && npm run build:runtime",
+    "build:cli": "tsc -p tsconfig.json",
+    "build:runtime": "node ./scripts/build-runtime.mjs",
     "test": "vitest run",
     "test:build": "npm run build"
   },
@@ -15,6 +17,7 @@
     "commander": "^14.0.2"
   },
   "devDependencies": {
+    "esbuild": "^0.28.0",
     "typescript": "^5.6.3",
     "vitest": "^3.2.4"
   },

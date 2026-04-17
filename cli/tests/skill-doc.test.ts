@@ -20,9 +20,9 @@ describe('skill-governor skill docs', () => {
     expect(text).toContain('## Example Dialogue')
     expect(text).toContain('## Output Expectations')
 
-    expect(text).toContain('skill-governor optimize --policy conservative --format json')
-    expect(text).toContain('skill-governor apply --plan')
-    expect(text).toContain('skill-governor rollback')
+    expect(text).toContain('bin/skill-governor optimize --policy conservative --format json')
+    expect(text).toContain('bin/skill-governor apply --plan')
+    expect(text).toContain('bin/skill-governor rollback')
     expect(text).toContain('Never edit raw provider `SKILL.md` files directly.')
     expect(text).toContain('Require explicit confirmation before `apply`.')
     expect(text).toContain('Default to dry-run behavior')
