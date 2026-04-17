@@ -7,18 +7,19 @@ const examplePlanPath = new URL('../examples/plan.json', import.meta.url)
 const exampleReportPath = new URL('../examples/report.md', import.meta.url)
 
 describe('skill-governor skill docs', () => {
-  it('contains the required sections and safety rules', async () => {
+  it('uses Anthropic-style skill metadata and governance instructions', async () => {
     const text = await readFile(skillDocPath, 'utf8')
 
-    expect(text).toContain('# Skill: skill-governor')
-    expect(text).toContain('## Description')
-    expect(text).toContain('## Capabilities')
-    expect(text).toContain('## Intent Mapping')
-    expect(text).toContain('## CLI Rules')
-    expect(text).toContain('## Execution Flow')
-    expect(text).toContain('## Safety Rules')
-    expect(text).toContain('## Example Dialogue')
-    expect(text).toContain('## Output Expectations')
+    expect(text).toContain('---')
+    expect(text).toContain('name: skill-governor')
+    expect(text).toContain('description: Govern local skill inventories')
+    expect(text).toContain('# Skill Governor')
+    expect(text).toContain('## What this skill does')
+    expect(text).toContain('## Working rules')
+    expect(text).toContain('## Command mapping')
+    expect(text).toContain('## Workflow')
+    expect(text).toContain('## Safety')
+    expect(text).toContain('## Response guidance')
 
     expect(text).toContain('bin/skill-governor optimize --policy conservative --format json')
     expect(text).toContain('bin/skill-governor apply --plan')

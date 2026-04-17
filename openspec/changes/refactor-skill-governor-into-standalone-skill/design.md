@@ -1,6 +1,6 @@
 ## Context
 
-The repository currently contains a working governance system and a project-local skill entry file at `.codex/skills/skill-governor/SKILL.md`. That is still not the final packaging model.
+The repository previously used `.codex/skills/skill-governor/SKILL.md` as an intermediate packaging model. That is no longer the target state.
 
 The target state is a standalone skill package where the repository itself is the skill. The top-level boundary should be immediately readable as:
 
@@ -11,6 +11,7 @@ skill-governor/
 ```
 
 The root `SKILL.md` is the product interface. The `cli/` directory contains the execution engine and all of its scaffolding, including source files, package metadata, tests, and examples.
+The root may also keep user-facing companion files such as examples and usage notes when that improves discoverability of the standalone skill.
 
 ## Goals / Non-Goals
 
@@ -34,12 +35,12 @@ The target structure should be:
 ```txt
 skill-governor/
   SKILL.md
+  examples/
   cli/
     package.json
     tsconfig.json
     vitest.config.ts
     README.md
-    examples/
     src/
     tests/
 ```
@@ -80,7 +81,7 @@ The migration should proceed in these steps:
 1. Move the skill definition from `.codex/skills/skill-governor/SKILL.md` to root `SKILL.md`.
 2. Move CLI runtime files and scaffolding into `cli/`.
 3. Update imports, script paths, test paths, and documentation references.
-4. Update examples and README to describe the standalone skill package structure.
+4. Update examples, usage docs, and CLI README to describe the standalone skill package structure.
 5. Verify all CLI tests, smoke tests, and OpenSpec validation still pass after relocation.
 
 ## Risks / Trade-offs
@@ -92,7 +93,7 @@ The migration should proceed in these steps:
   - Mitigation: keep the product-facing top-level boundary minimal and move execution scaffolding into `cli/`.
 
 - Risk: previous skill locations may remain referenced in docs or tests.
-  - Mitigation: explicitly audit and replace `.codex/skills/skill-governor/` references.
+  - Mitigation: explicitly audit and replace stale `.codex/skills/skill-governor/` references and mark them as historical only when retained in change records.
 
 ## Open Questions
 
